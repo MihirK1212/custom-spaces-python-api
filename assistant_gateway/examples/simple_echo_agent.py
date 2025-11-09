@@ -1,0 +1,101 @@
+from __future__ import annotations
+
+import uuid
+from typing import List
+
+from assistant_gateway.agents.base import Agent
+from assistant_gateway.schemas import (
+    AgentStep,
+    AssistantResponse,
+    Message,
+    Role,
+    ToolCall,
+    ToolResult,
+    UserContext,
+)
+from assistant_gateway.tools.base import ToolContext
+from assistant_gateway.tools.registry import ToolRegistry
+from assistant_gateway.examples.todo_crud_tools import register_default_crud_suite
+
+
+class SimpleEchoAgent(Agent):
+    """
+    A minimal agent that:
+    - Echos the latest user message
+    - Demonstrates a single tool call if the user starts with 'tool:' and passes JSON after it
+    """
+
+    @property
+    def tool_registry(self) -> ToolRegistry:
+        registry = ToolRegistry()
+        if not list(registry.all()):
+            register_default_crud_suite(registry)
+        return registry
+
+    async def run(
+        self,
+        messages: List[Message],
+        predefined_tool_context: ToolContext,
+        user_context: UserContext,
+    ) -> AssistantResponse:
+        last_user = next((m for m in reversed(messages) if m.role == Role.user), None)
+        if not last_user:
+            return AssistantResponse(
+                messages=[
+                    Message(role=Role.assistant, content="How can I help you today?")
+                ]
+            )
+
+        content = last_user.content.strip()
+        steps: List[AgentStep] = []
+        tool_results: List[ToolResult] = []
+
+        # Quick demo: "tool: <name> {json}"
+        if content.lower().startswith("tool:"):
+            try:
+                rest = content[5:].strip()
+                name, json_part = rest.split(" ", 1)
+                import json as _json
+
+                payload = _json.loads(json_part)
+                call_id = str(uuid.uuid4())
+                tool_call = ToolCall(id=call_id, name=name, input=payload)
+                steps.append(
+                    AgentStep(
+                        thought="Calling a tool as requested.", tool_calls=[tool_call]
+                    )
+                )
+                tool = self.tool_registry.get(name)
+                if not tool:
+                    final = f"Unknown tool: {name}"
+                    return AssistantResponse(
+                        messages=[Message(role=Role.assistant, content=final)],
+                        steps=steps,
+                        tool_results=tool_results,
+                        final_text=final,
+                    )
+                tool_ctx_with_input = predefined_tool_context.with_input(payload)
+                result = await tool.run(tool_ctx_with_input)
+                result.tool_call_id = call_id
+                tool_results.append(result)
+                final_text = f"Tool {name} result: {result.output}"
+                return AssistantResponse(
+                    messages=[Message(role=Role.assistant, content=final_text)],
+                    steps=steps,
+                    tool_results=tool_results,
+                    final_text=final_text,
+                )
+            except Exception as e:
+                err = f"Failed to parse or execute tool call: {e}"
+                return AssistantResponse(
+                    messages=[Message(role=Role.assistant, content=err)]
+                )
+
+        # Default: echo
+        reply = f"You said: {content}"
+        return AssistantResponse(
+            messages=[Message(role=Role.assistant, content=reply)],
+            steps=steps,
+            tool_results=tool_results,
+            final_text=reply,
+        )
