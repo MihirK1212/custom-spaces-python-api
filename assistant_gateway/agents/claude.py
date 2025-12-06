@@ -22,7 +22,7 @@ from assistant_gateway.schemas import (
 
 class ClaudeBaseAgent(Agent):
     """
-    Adapter that prepares tools from ``ToolRegistry`` for the Claude Agent SDK.
+    Adapter that prepares tools from ``ToolRegistry`` for the ClaudeAgent SDK.
 
     The actual conversation loop still needs to be implemented, but the
     infrastructure for translating registry entries into ``@tool``-decorated
@@ -70,9 +70,7 @@ class ClaudeBaseAgent(Agent):
 
     async def run(
         self,
-        messages: List[Message],
-        predefined_tool_context: ToolContext,
-        user_context: UserContext,
+        messages: List[Message]
     ) -> AssistantResponse:
         mcp_server_options = self.get_mcp_server_options()
 
@@ -138,6 +136,7 @@ class ClaudeBaseAgent(Agent):
         from claude_agent_sdk import tool as claude_tool_decorator
 
         tool_input_schema = cls._build_input_schema(tool)
+        print(f"tool input schema: {tool_input_schema}")
 
         @claude_tool_decorator(tool.name, tool.metadata.description, tool_input_schema)
         async def _invoke(args: Dict[str, Any]):
@@ -164,15 +163,57 @@ class ClaudeBaseAgent(Agent):
 
     @classmethod
     def _build_input_schema(cls, tool: Tool) -> Dict[str, Any]:
+        """Build a proper JSON Schema from the tool's input model."""
         model = tool.metadata.input_model
         if not model:
-            return {}
-        schema: Dict[str, Any] = {}
-        for name, field in model.model_fields.items():
-            annotation = field.annotation
-            if isinstance(annotation, type):
-                schema[name] = annotation
-            else:
-                # Fall back to broad typing when the annotation is a typing construct
-                schema[name] = Any
-        return schema
+            return {"type": "object", "properties": {}}
+        
+        # Use Pydantic's built-in JSON schema generation
+        json_schema = model.model_json_schema()
+        
+        # Filter out fields we don't want to expose to the tool input
+        excluded_fields = {}
+        if 'properties' in json_schema:
+            json_schema['properties'] = {
+                k: v for k, v in json_schema['properties'].items()
+                if k not in excluded_fields
+            }
+        if 'required' in json_schema:
+            json_schema['required'] = [
+                r for r in json_schema['required']
+                if r not in excluded_fields
+            ]
+        
+        # Resolve $defs references inline for simpler schema
+        json_schema = cls._resolve_schema_refs(json_schema)
+        
+        # Remove $defs after resolving
+        if '$defs' in json_schema:
+            del json_schema['$defs']
+        
+        return json_schema
+
+    @classmethod
+    def _resolve_schema_refs(cls, schema: Dict[str, Any], defs: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Recursively resolve $ref references in JSON Schema."""
+        if defs is None:
+            defs = schema.get('$defs', {})
+        
+        if isinstance(schema, dict):
+            # Handle $ref
+            if '$ref' in schema:
+                ref_path = schema['$ref']
+                # Extract the definition name from "#/$defs/DefinitionName"
+                if ref_path.startswith('#/$defs/'):
+                    def_name = ref_path.split('/')[-1]
+                    if def_name in defs:
+                        # Return a copy of the resolved definition (recursively resolve it too)
+                        return cls._resolve_schema_refs(defs[def_name].copy(), defs)
+                return schema
+            
+            # Recursively resolve all dict values
+            return {k: cls._resolve_schema_refs(v, defs) for k, v in schema.items()}
+        elif isinstance(schema, list):
+            return [cls._resolve_schema_refs(item, defs) for item in schema]
+        else:
+            return schema

@@ -34,9 +34,7 @@ class SimpleEchoAgent(Agent):
 
     async def run(
         self,
-        messages: List[Message],
-        predefined_tool_context: ToolContext,
-        user_context: UserContext,
+        messages: List[Message]
     ) -> AssistantResponse:
         last_user = next((m for m in reversed(messages) if m.role == Role.user), None)
         if not last_user:
@@ -74,7 +72,7 @@ class SimpleEchoAgent(Agent):
                         tool_results=tool_results,
                         final_text=final,
                     )
-                tool_ctx_with_input = predefined_tool_context.with_input(payload)
+                tool_ctx_with_input = ToolContext().with_input(payload)
                 result = await tool.run(tool_ctx_with_input)
                 result.tool_call_id = call_id
                 tool_results.append(result)

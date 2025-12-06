@@ -59,7 +59,10 @@ class RESTTool(Tool):
 
         # build input model using query_params_model, data_payload_model, and json_payload_model
         self._input_model = RESTTool.build_input_model(
-            name, query_params_model, data_payload_model, json_payload_model
+            name,
+            query_params_model=query_params_model,
+            data_payload_model=data_payload_model,
+            json_payload_model=json_payload_model,
         )
 
         # build metadata using input model and output model
@@ -96,9 +99,15 @@ class RESTTool(Tool):
             **context.metadata.get("default_headers", {}),
             **parsed_input.headers,
         }
-        query_params = self.serialize_params_for_request(parsed_input.query, self._query_params_model)
-        json_payload = self.serialize_params_for_request(parsed_input.json, self._json_payload_model)
-        data_payload = self.serialize_params_for_request(parsed_input.data, self._data_payload_model)
+        query_params = self.serialize_params_for_request(
+            parsed_input.query, self._query_params_model
+        )
+        json_payload = self.serialize_params_for_request(
+            parsed_input.json, self._json_payload_model
+        )
+        data_payload = self.serialize_params_for_request(
+            parsed_input.data, self._data_payload_model
+        )
 
         timeout = httpx.Timeout(context.timeout_seconds)
         async with httpx.AsyncClient(timeout=timeout) as client:
@@ -166,9 +175,10 @@ class RESTTool(Tool):
     def build_input_model(
         cls,
         tool_name: str,
+        *,
         query_params_model: Optional[Type[BaseModel]] = None,
-        json_payload_model: Optional[Type[BaseModel]] = None,
         data_payload_model: Optional[Type[BaseModel]] = None,
+        json_payload_model: Optional[Type[BaseModel]] = None,
     ) -> Type[BaseModel]:
         sanitized_name = "".join(ch if ch.isalnum() else "_" for ch in tool_name)
         class_name = f"{cls.__name__}Input_{sanitized_name}"

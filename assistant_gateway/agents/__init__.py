@@ -1,3 +1,3 @@
-"""Agent interfaces and adapters (Claude, LangGraph, etc.)."""
+"""interfaces and adapters (Claude, LangGraph, etc.)."""
 
 

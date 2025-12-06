@@ -177,7 +177,7 @@ class ClaudeTodoListAgent(ClaudeBaseAgent):
 
 
 async def main():
-    """Interactive CLI for the Calculator Agent."""
+    """Interactive CLI for the CalculatorAgent."""
     # Get API key from environment or prompt
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
@@ -191,7 +191,7 @@ async def main():
 
     # Initialize the agent
     print("\n" + "=" * 50)
-    print("  Calculator Agent (Claude)")
+    print("  CalculatorAgent (Claude)")
     print(f"  Model: {model}")
     print("  Tools: addition, multiplication, insanity")
     print("=" * 50)
@@ -201,8 +201,6 @@ async def main():
 
     # Conversation history
     messages: List[Message] = []
-    user_context = UserContext(user_id="cli-user", session_id="cli-session")
-    tool_context = ToolContext()
 
     while True:
         try:
@@ -222,8 +220,6 @@ async def main():
             # Get response from agent
             response = await agent.run(
                 messages=messages,
-                predefined_tool_context=tool_context,
-                user_context=user_context,
             )
 
             # Display the response
