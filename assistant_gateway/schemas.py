@@ -13,10 +13,11 @@ class Role(str, Enum):
     tool = "tool"
 
 
-class Message(BaseModel):
-    role: Role
-    content: str
-    tool_result: Optional[ToolResult] = None
+class ToolResult(BaseModel):
+    tool_name: str
+    output: Any
+    raw_response: Any = None
+    tool_call_id: Optional[str] = None
 
 
 class ToolCall(BaseModel):
@@ -31,11 +32,10 @@ class AgentStep(BaseModel):
     final_response: Optional[str] = None
 
 
-class ToolResult(BaseModel):
-    tool_name: str
-    output: Any
-    raw_response: Any = None
-    tool_call_id: Optional[str] = None
+class Message(BaseModel):
+    role: Role
+    content: str
+    tool_result: Optional[ToolResult] = None
 
 
 class UserContext(BaseModel):

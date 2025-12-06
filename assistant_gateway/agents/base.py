@@ -14,8 +14,6 @@ class Agent(ABC):
     @abstractmethod
     async def run(
         self,
-        messages: List[Message],
-        predefined_tool_context: ToolContext,
-        user_context: UserContext,
+        messages: List[Message]
     ) -> AssistantResponse:
         raise NotImplementedError("Subclasses must implement this method")
