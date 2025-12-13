@@ -64,10 +64,10 @@ TODO_API_REST_TOOLS = [
 ]
 
 # temporary hardcoded token, will come dynamically later
-JWT_BEARER_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIzOGUyM2FiMS1kNzNlLTQ2NjYtOTExYi0yNWNkZmRlZGMwY2UiLCJ1c2VybmFtZSI6InVzZXIxIiwiYXV0aE1ldGhvZElkIjoiMzBjMzI3ZDQtOTkxMC00NjI5LTgyYTktZWZjNGNmN2NhZDgwIiwidG9rZW5QdXJwb3NlIjoidXNlci1hdXRoIiwiaWF0IjoxNzY1MDA3MDI4LCJleHAiOjE3NjUwMTA2Mjh9.VFds8YWytIvQCKN9NL63idY2x1ysutkYQbMLUoR0mhM"
+JWT_BEARER_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIzOGUyM2FiMS1kNzNlLTQ2NjYtOTExYi0yNWNkZmRlZGMwY2UiLCJ1c2VybmFtZSI6InVzZXIxIiwiYXV0aE1ldGhvZElkIjoiMzBjMzI3ZDQtOTkxMC00NjI5LTgyYTktZWZjNGNmN2NhZDgwIiwidG9rZW5QdXJwb3NlIjoidXNlci1hdXRoIiwiaWF0IjoxNzY1NjI5NTgwLCJleHAiOjE3NjU2MzMxODB9.FFr6oUbDO9rIE5tS6U0dkKvLU7JuK8Lb4XS1cV8h444"
 PREDEFINED_TOOL_CONTEXT = ToolContext(
     metadata={
-        "base_url": "http://localhost:5000",
+        "base_url": "http://172.23.176.1:5000",
         "default_headers": {
             "Authorization": f"Bearer {JWT_BEARER_TOKEN}",
         },
@@ -78,7 +78,7 @@ PREDEFINED_TOOL_CONTEXT = ToolContext(
 class ClaudeTodoListAgent(ClaudeBaseAgent):
     def __init__(
         self,
-        api_key: Optional[str],
+        api_key: Optional[str] = os.environ.get("ANTHROPIC_API_KEY"),
         model: str = DEFAULT_MODEL,
     ) -> None:
         super().__init__(api_key)
@@ -94,7 +94,7 @@ class ClaudeTodoListAgent(ClaudeBaseAgent):
 
         # Use with Claude
         self._mcp_server_options = ClaudeAgentOptions(
-            model=model,
+            model=model or DEFAULT_MODEL,
             mcp_servers={"space-todo-list": space_todo_list_mcp_server},
             system_prompt="You are a helpful space todo list assistant. Use the available tools to add and get todo items for a given widgetId from the Space API.",
             allowed_tools=[

@@ -1,5 +1,16 @@
 from __future__ import annotations
 
+import sys 
+import asyncio
+
+sys.path.append("..")
+sys.path.append(".")
+
+# # Windows' default SelectorEventLoop cannot spawn subprocesses; Claude's SDK
+# # launches a helper process, so we need ProactorEventLoop on Windows.
+# if sys.platform.startswith("win"):
+# 	asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
