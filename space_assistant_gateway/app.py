@@ -1,70 +1,38 @@
 from __future__ import annotations
 
+import os
 import sys
-from functools import lru_cache
-
-sys.path.append("..")
-sys.path.append(".")
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.dirname(os.path.dirname(CURRENT_DIR)))  # assistant_gateway/
+sys.path.append(os.path.dirname(CURRENT_DIR))  # assistant_gateway/examples/
+sys.path.append(
+    os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_DIR)))
+)  # repo root
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from space_assistant_gateway.api.router import (
-    get_orchestrator,
-    router as assistant_router,
-)
-from space_assistant_gateway.core.config import (
-    GatewayConfig,
-    get_settings,
-)
-from space_assistant_gateway.orchestration.orchestrator import ConversationOrchestrator
+from assistant_gateway.examples.chat_orchestrator.todo_list_agent_chat_orchestrator import build_gateway_config
+
+from assistant_gateway.rest_api.fast_api_rest_assistant.enrich import enrich_app_with_assistant_router
 
 
-def create_app(*, config: GatewayConfig) -> FastAPI:
-    """
-    Create a FastAPI app with minimal configuration.
-
-    Developers can either:
-    - pass a pre-built ConversationOrchestrator instance, or
-    - provide a GatewayConfig describing agent builders and storage/queue options.
-    """
-
-    settings = get_settings()
-    gateway_config = config
-
-    @lru_cache()
-    def orchestrator_factory() -> ConversationOrchestrator:
-        return ConversationOrchestrator(config=gateway_config)
-
-    app = FastAPI(title="Space Assistant Gateway", version="0.1.0")
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-    app.dependency_overrides[get_orchestrator] = orchestrator_factory
-    app.include_router(assistant_router, prefix=settings.api_prefix, tags=["assistant"])
-    return app
-
-
-def enrich_app_with_assistant_router(
-    *, app: FastAPI, config: GatewayConfig, api_prefix: str
-) -> FastAPI:
-    """
-    Enrich a FastAPI app with the assistant router.
-    """
-
-    gateway_config = config
-
-    @lru_cache()
-    def orchestrator_factory() -> ConversationOrchestrator:
-        return ConversationOrchestrator(config=gateway_config)
-
-    app.dependency_overrides[get_orchestrator] = orchestrator_factory
-    app.include_router(assistant_router, prefix=api_prefix, tags=["assistant"])
-    return app
+def create_app() -> FastAPI:
+	app = FastAPI(title="Space Assistant Gateway", version="0.1.0")
+	app.add_middleware(
+		CORSMiddleware,
+		allow_origins=["*"],
+		allow_credentials=True,
+		allow_methods=["*"],
+		allow_headers=["*"],
+	)
+	enrich_app_with_assistant_router(
+		app=app,
+		config=build_gateway_config(),
+		api_prefix="/api/v1",
+		router_tags=["assistant"],
+	)
+	return app
 
 
 app = create_app()
