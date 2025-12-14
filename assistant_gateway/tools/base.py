@@ -9,24 +9,30 @@ from pydantic import BaseModel, Field
 from assistant_gateway.schemas import ToolResult
 
 
-class ToolMetadata(BaseModel):
-    name: str
-    description: str
-    input_model: Optional[Type[BaseModel]] = None
-    output_description: Optional[str] = None
-    output_model: Optional[Type[BaseModel]] = None
+class ToolConfig(BaseModel):
+    """
+    Configuration for a tool.
+    Config is static and is set when the tool is registered.
+    """
+    name: str = Field(description="The name of the tool")
+    description: str = Field(description="The description of the tool")
+    input_model: Optional[Type[BaseModel]] = Field(default=None, description="The input model of the tool")
+    output_description: Optional[str] = Field(default=None, description="The output description of the tool")
+    output_model: Optional[Type[BaseModel]] = Field(default=None, description="The output model of the tool")
 
 
 class ToolContext(BaseModel):
     """
     Runtime context passed to tools.
-    
+
     The context carries per request metadata such as input payload, timeout, and metadata.
+    Context is dynamic and is set when the tool is called.
     """
 
     input: Dict[str, Any] = Field(default_factory=dict)
-    timeout_seconds: int = Field(default=30, description="Timeout in seconds for the tool execution")
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    timeout_seconds: int = Field(
+        default=30, description="Timeout in seconds for the tool execution"
+    )
 
     def with_input(self, payload: Dict[str, Any]) -> "ToolContext":
         """
@@ -42,13 +48,15 @@ class ToolContext(BaseModel):
 
 
 class Tool(ABC):
-    def __init__(self, metadata: ToolMetadata):
-        self.metadata = metadata
+    def __init__(self, config: ToolConfig):
+        self.config = config
 
     @property
     def name(self) -> str:
-        return self.metadata.name
+        return self.config.name
 
     @abstractmethod
     async def run(self, context: ToolContext) -> ToolResult:
-        raise NotImplementedError("The run method must be implemented by the subclass for a Tool")
+        raise NotImplementedError(
+            "The run method must be implemented by the subclass for a Tool"
+        )

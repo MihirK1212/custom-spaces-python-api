@@ -3,8 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import List
 
-from assistant_gateway.schemas import AssistantResponse, Message, UserContext
-from assistant_gateway.tools.base import ToolContext
+from assistant_gateway.schemas import AssistantResponse, Message
 
 
 class Agent(ABC):
