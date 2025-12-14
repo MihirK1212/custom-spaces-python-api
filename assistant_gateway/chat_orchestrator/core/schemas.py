@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
-
 from pydantic import BaseModel, Field
 
 from assistant_gateway.schemas import AssistantResponse, Message
@@ -18,6 +17,22 @@ class StoredMessage(Message):
     id: str
     created_at: datetime
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class UserContext(BaseModel):
+    user_id: Optional[str] = None
+    session_id: Optional[str] = None
+    auth_token: Optional[str] = None
+    extra_metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class BackendServerContext(BaseModel):
+    base_url: Optional[str] = None
+    extra_metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class GatewayDefaultFallbackConfig(BaseModel):
+    fallback_backend_url: Optional[str] = None
 
 
 class ChatMetadata(BaseModel):
@@ -60,4 +75,3 @@ class BackgroundTask(BaseModel):
     payload: Dict[str, Any] = Field(default_factory=dict)
     result: Optional[AssistantResponse] = None
     error: Optional[str] = None
-

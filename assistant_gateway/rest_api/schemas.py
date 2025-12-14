@@ -5,9 +5,9 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-from assistant_gateway.schemas import AssistantResponse, UserContext
-from space_assistant_gateway.core.schemas import BackgroundTask, ChatMetadata, StoredMessage
-
+from assistant_gateway.schemas import AssistantResponse
+from space_assistant_gateway.core.schemas import BackgroundTask, ChatMetadata, StoredMessage, BackendServerContext
+from space_assistant_gateway.core.schemas import UserContext
 
 class RunMode(str, Enum):
 	sync = "sync"
@@ -30,7 +30,7 @@ class SendMessageRequest(BaseModel):
 	run_mode: RunMode = RunMode.sync
 	message_metadata: Dict[str, Any] = Field(default_factory=dict)
 	user_context: Optional[UserContext] = None
-
+	backend_server_context: Optional[BackendServerContext] = None
 
 class SendMessageResponse(BaseModel):
 	chat: ChatMetadata

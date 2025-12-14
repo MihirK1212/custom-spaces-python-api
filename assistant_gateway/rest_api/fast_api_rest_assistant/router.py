@@ -4,7 +4,7 @@ from functools import lru_cache
 
 from fastapi import APIRouter, Depends, Response, status
 
-from space_assistant_gateway.api.schemas import (
+from space_assistant_gateway.rest_api.schemas import (
     ChatMessagesResponse,
     ChatResponse,
     CreateChatRequest,
@@ -19,7 +19,9 @@ from space_assistant_gateway.orchestration.orchestrator import ConversationOrche
 
 @lru_cache()
 def get_orchestrator() -> ConversationOrchestrator:
-    return ConversationOrchestrator()
+    raise NotImplementedError(
+        "Orchestrator is not implemented. Please provide a ConversationOrchestrator instance."
+    )
 
 
 router = APIRouter()
@@ -70,6 +72,7 @@ async def send_chat_message(
         run_in_background=body.run_mode == RunMode.background,
         message_metadata=body.message_metadata,
         user_context=body.user_context,
+        backend_server_context=body.backend_server_context,
     )
     if task:
         response.status_code = status.HTTP_202_ACCEPTED

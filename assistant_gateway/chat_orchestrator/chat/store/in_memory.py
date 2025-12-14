@@ -3,26 +3,8 @@ from __future__ import annotations
 import asyncio
 from typing import Dict, List, Optional
 
-from space_assistant_gateway.core.schemas import ChatMetadata, StoredMessage
-
-
-class ChatStore:
-    """Abstraction for persisting chat metadata and messages."""
-
-    async def create_chat(self, chat: ChatMetadata) -> ChatMetadata:
-        raise NotImplementedError
-
-    async def get_chat(self, chat_id: str) -> Optional[ChatMetadata]:
-        raise NotImplementedError
-
-    async def update_chat(self, chat: ChatMetadata) -> ChatMetadata:
-        raise NotImplementedError
-
-    async def append_message(self, chat_id: str, message: StoredMessage) -> None:
-        raise NotImplementedError
-
-    async def list_messages(self, chat_id: str) -> List[StoredMessage]:
-        raise NotImplementedError
+from assistant_gateway.chat_orchestrator.core.schemas import ChatMetadata, StoredMessage
+from assistant_gateway.chat_orchestrator.chat.store.base import ChatStore
 
 
 class InMemoryChatStore(ChatStore):
@@ -59,4 +41,3 @@ class InMemoryChatStore(ChatStore):
     async def list_messages(self, chat_id: str) -> List[StoredMessage]:
         async with self._lock:
             return list(self._messages.get(chat_id, []))
-

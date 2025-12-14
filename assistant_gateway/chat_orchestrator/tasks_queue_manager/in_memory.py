@@ -3,27 +3,8 @@ from __future__ import annotations
 import asyncio
 from typing import Dict, List, Optional
 
-from space_assistant_gateway.core.schemas import BackgroundTask
-
-
-class TasksQueueManager:
-    """Abstraction for queue operations so backends can be swapped later."""
-
-    async def enqueue(self, queue_id: str, task: BackgroundTask) -> None:
-        raise NotImplementedError
-
-    async def get(self, queue_id: str, task_id: str) -> Optional[BackgroundTask]:
-        raise NotImplementedError
-
-    async def update(self, queue_id: str, task: BackgroundTask) -> None:
-        raise NotImplementedError
-
-    async def delete(self, queue_id: str, task_id: str) -> None:
-        raise NotImplementedError
-
-    async def list(self, queue_id: str) -> List[BackgroundTask]:
-        raise NotImplementedError
-
+from assistant_gateway.chat_orchestrator.core.schemas import BackgroundTask
+from assistant_gateway.chat_orchestrator.tasks_queue_manager.base import TasksQueueManager
 
 class InMemoryTasksQueueManager(TasksQueueManager):
     """

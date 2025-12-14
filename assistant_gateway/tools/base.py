@@ -33,7 +33,6 @@ class ToolContext(BaseModel):
     timeout_seconds: int = Field(
         default=30, description="Timeout in seconds for the tool execution"
     )
-    metadata: Dict[str, Any] = Field(default_factory=dict)
 
     def with_input(self, payload: Dict[str, Any]) -> "ToolContext":
         """

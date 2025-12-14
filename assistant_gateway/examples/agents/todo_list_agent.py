@@ -19,6 +19,8 @@ from assistant_gateway.tools.rest_tool import RESTTool
 from assistant_gateway.tools.registry import ToolRegistry
 from assistant_gateway.tools.base import ToolContext
 from assistant_gateway.schemas import Message, Role
+from assistant_gateway.tools.registry import ToolRegistry
+from assistant_gateway.tools.rest_tool import RESTTool, RestToolContext
 
 
 dotenv.load_dotenv()
@@ -65,13 +67,11 @@ TODO_API_REST_TOOLS = [
 ]
 
 # temporary hardcoded token, will come dynamically later
-JWT_BEARER_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIzOGUyM2FiMS1kNzNlLTQ2NjYtOTExYi0yNWNkZmRlZGMwY2UiLCJ1c2VybmFtZSI6InVzZXIxIiwiYXV0aE1ldGhvZElkIjoiMzBjMzI3ZDQtOTkxMC00NjI5LTgyYTktZWZjNGNmN2NhZDgwIiwidG9rZW5QdXJwb3NlIjoidXNlci1hdXRoIiwiaWF0IjoxNzY1NzA1MTI0LCJleHAiOjE3NjU3MDg3MjR9.kQ8mbkgxyncVAuZj16bKxqM2_6sl-Iw4uuwsSUzZEd8"
-PREDEFINED_TOOL_CONTEXT = ToolContext(
-    metadata={
-        "base_url": os.environ.get("CUSTOM_SPACES_BACKEND_URL"),
-        "default_headers": {
-            "Authorization": f"Bearer {JWT_BEARER_TOKEN}",
-        },
+JWT_BEARER_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIzOGUyM2FiMS1kNzNlLTQ2NjYtOTExYi0yNWNkZmRlZGMwY2UiLCJ1c2VybmFtZSI6InVzZXIxIiwiYXV0aE1ldGhvZElkIjoiMzBjMzI3ZDQtOTkxMC00NjI5LTgyYTktZWZjNGNmN2NhZDgwIiwidG9rZW5QdXJwb3NlIjoidXNlci1hdXRoIiwiaWF0IjoxNzY1NzE2Mjc3LCJleHAiOjE3NjU3MTk4Nzd9.61W1ctlUzS9EVmXkAjUaYv1hA0U0nBBiVMAAnTsgt_k"
+PREDEFINED_TOOL_CONTEXT = RestToolContext(
+    backend_url=os.environ.get("BACKEND_URL"),
+    default_headers={
+        "Authorization": f"Bearer {JWT_BEARER_TOKEN}",
     },
 )
 

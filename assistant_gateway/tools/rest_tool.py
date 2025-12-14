@@ -4,13 +4,14 @@ from typing import Any, Dict, Optional, Type
 from urllib.parse import urljoin
 import httpx
 from pydantic import BaseModel, Field, ValidationError, create_model
+from copy import deepcopy
 
 from assistant_gateway.errors import ToolExecutionError
 from assistant_gateway.schemas import ToolResult
 from assistant_gateway.tools.base import Tool, ToolContext, ToolConfig
 
 
-class _RESTToolConfig(ToolConfig):
+class RESTToolConfig(ToolConfig):
     """ "
     Configuration for a REST tool. It extends the ToolConfig class, and adds a backend_url field.
     """
@@ -19,6 +20,34 @@ class _RESTToolConfig(ToolConfig):
         default=None,
         description="The base URL of the backend server. If not provided, the base URL will be taken during runtime from the ToolContext.",
     )
+
+
+class RestToolContext(ToolContext):
+    """
+    Context for a REST tool. It extends the ToolContext class, and adds a base_url field.
+    """
+
+    backend_url: Optional[str] = Field(
+        default=None,
+        description="Override the default base URL supplied via dynamic ToolContext.input or RESTToolConfig.",
+    )
+
+    default_headers: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Default headers to include with the request. If not provided, the default headers will be taken during runtime from the ToolContext.",
+    )
+
+    def with_input(self, payload: Dict[str, Any]) -> "RestToolContext":
+        """
+        Return a cloned context embedding the tool-specific input payload.
+
+        This avoids mutating the shared context when multiple tools are called
+        within the same agent turn.
+        """
+
+        data = deepcopy(self.model_dump())
+        data["input"] = payload
+        return RestToolContext(**data)
 
 
 class _DefaultRESTQueryAndPayloadModel(BaseModel):
@@ -49,9 +78,9 @@ class _BaseRESTToolInput(BaseModel):
         description="Form data to include with the request. Must be a Pydantic model.",
     )
     headers: Dict[str, str] = Field(default_factory=dict)
-    base_url: Optional[str] = Field(
+    backend_url: Optional[str] = Field(
         default=None,
-        description="Override the default base URL supplied via ToolContext.",
+        description="Override the default backend URL supplied via dynamic ToolContext.input or RESTToolConfig.",
     )
 
 
@@ -81,7 +110,7 @@ class RESTTool(Tool):
         )
 
         # build config using name, description, input model, output model, and backend_url
-        self._config = _RESTToolConfig(
+        self._config = RESTToolConfig(
             name=name,
             description=description,
             input_model=self._input_model,
@@ -92,7 +121,7 @@ class RESTTool(Tool):
 
         super().__init__(self._config)
 
-    async def run(self, context: ToolContext) -> ToolResult:
+    async def run(self, context: RestToolContext) -> ToolResult:
         try:
             parsed_input = self._input_model(**context.input)
         except Exception as e:
@@ -102,21 +131,19 @@ class RESTTool(Tool):
             parsed_input, _BaseRESTToolInput
         ), f"parsed input is not a _BaseRESTToolInput: {parsed_input}"
 
-        base_url = (
-            parsed_input.base_url
-            or context.metadata.get("base_url")
-            or self._config.backend_url
+        backend_url = (
+            parsed_input.backend_url or context.backend_url or self._config.backend_url
         )
-        if not base_url:
+        if not backend_url:
             raise ToolExecutionError(
-                f"{self.name}: missing base_url. Provide one in ToolContext or the tool input."
+                f"{self.name}: missing backend_url. Provide one in ToolContext or the tool input."
             )
-        base_url = str(base_url)
-
-        url = urljoin(base_url.rstrip("/") + "/", parsed_input.path.lstrip("/"))
+        backend_url = str(backend_url)
+        
+        url = urljoin(backend_url.rstrip("/") + "/", parsed_input.path.lstrip("/"))
         method = parsed_input.method.upper()
         headers = {
-            **context.metadata.get("default_headers", {}),
+            **context.default_headers,
             **parsed_input.headers,
         }
         query_params = self.serialize_params_for_request(
