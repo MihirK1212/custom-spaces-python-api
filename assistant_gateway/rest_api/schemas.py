@@ -6,8 +6,8 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from assistant_gateway.schemas import AssistantResponse
-from space_assistant_gateway.core.schemas import BackgroundTask, ChatMetadata, StoredMessage, BackendServerContext
-from space_assistant_gateway.core.schemas import UserContext
+from assistant_gateway.chat_orchestrator.core.schemas import BackgroundTask, ChatMetadata, StoredMessage, BackendServerContext
+from assistant_gateway.chat_orchestrator.core.schemas import UserContext
 
 class RunMode(str, Enum):
 	sync = "sync"

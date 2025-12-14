@@ -51,9 +51,9 @@ class GatewayConfig:
     """
 
     agent_configs: Mapping[str, AgentConfig]
-    default_fallback_config: Optional[GatewayDefaultFallbackConfig] = None
     chat_store: ChatStore
     queue_manager: TasksQueueManager
+    default_fallback_config: Optional[GatewayDefaultFallbackConfig] = None
 
     def get_chat_store(self) -> ChatStore:
         return self.chat_store or InMemoryChatStore()

@@ -4,7 +4,7 @@ from functools import lru_cache
 
 from fastapi import APIRouter, Depends, Response, status
 
-from space_assistant_gateway.rest_api.schemas import (
+from assistant_gateway.rest_api.schemas import (
     ChatMessagesResponse,
     ChatResponse,
     CreateChatRequest,
@@ -14,7 +14,9 @@ from space_assistant_gateway.rest_api.schemas import (
     SendMessageResponse,
     TaskResponse,
 )
-from space_assistant_gateway.orchestration.orchestrator import ConversationOrchestrator
+from assistant_gateway.chat_orchestrator.orchestration.orchestrator import (
+    ConversationOrchestrator,
+)
 
 
 @lru_cache()
