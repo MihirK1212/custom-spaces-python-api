@@ -1,14 +1,23 @@
 from __future__ import annotations
 
+import os
+import sys
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.dirname(os.path.dirname(CURRENT_DIR)))  # assistant_gateway/
+sys.path.append(os.path.dirname(CURRENT_DIR))  # assistant_gateway/examples/
+sys.path.append(
+    os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_DIR)))
+)  # repo root
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from space_assistant_gateway.api.router import router as assistant_router
-from space_assistant_gateway.core.config import get_settings
+from assistant_gateway.examples.chat_orchestrator.todo_list_agent_chat_orchestrator import build_gateway_config
+
+from assistant_gateway.rest_api.fast_api_rest_assistant.enrich import enrich_app_with_assistant_router
 
 
 def create_app() -> FastAPI:
-	settings = get_settings()
 	app = FastAPI(title="Space Assistant Gateway", version="0.1.0")
 	app.add_middleware(
 		CORSMiddleware,
@@ -17,7 +26,12 @@ def create_app() -> FastAPI:
 		allow_methods=["*"],
 		allow_headers=["*"],
 	)
-	app.include_router(assistant_router, prefix=settings.api_prefix, tags=["assistant"])
+	enrich_app_with_assistant_router(
+		app=app,
+		config=build_gateway_config(),
+		api_prefix="/api/v1",
+		router_tags=["assistant"],
+	)
 	return app
 
 
