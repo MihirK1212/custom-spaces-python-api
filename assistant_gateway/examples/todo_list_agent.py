@@ -6,19 +6,20 @@ sys.path.append(".")
 sys.path.append("..")
 sys.path.append("../..")
 
-from assistant_gateway.agents.claude import ClaudeBaseAgent
-from assistant_gateway.tools.rest_tool import RESTTool
-from pydantic import BaseModel
-from assistant_gateway.tools.registry import ToolRegistry
-from assistant_gateway.tools.base import ToolContext
-from assistant_gateway.schemas import Message, UserContext, Role
-from claude_agent_sdk import ClaudeAgentOptions
 import os
 import asyncio
 from typing import Optional, List
 from pydantic import Field
-
 import dotenv
+from claude_agent_sdk import ClaudeAgentOptions
+from pydantic import BaseModel
+
+from assistant_gateway.agents.claude import ClaudeBaseAgent
+from assistant_gateway.tools.rest_tool import RESTTool
+from assistant_gateway.tools.registry import ToolRegistry
+from assistant_gateway.tools.base import ToolContext
+from assistant_gateway.schemas import Message, Role
+
 
 dotenv.load_dotenv()
 
@@ -64,10 +65,10 @@ TODO_API_REST_TOOLS = [
 ]
 
 # temporary hardcoded token, will come dynamically later
-JWT_BEARER_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIzOGUyM2FiMS1kNzNlLTQ2NjYtOTExYi0yNWNkZmRlZGMwY2UiLCJ1c2VybmFtZSI6InVzZXIxIiwiYXV0aE1ldGhvZElkIjoiMzBjMzI3ZDQtOTkxMC00NjI5LTgyYTktZWZjNGNmN2NhZDgwIiwidG9rZW5QdXJwb3NlIjoidXNlci1hdXRoIiwiaWF0IjoxNzY1NjI5NTgwLCJleHAiOjE3NjU2MzMxODB9.FFr6oUbDO9rIE5tS6U0dkKvLU7JuK8Lb4XS1cV8h444"
+JWT_BEARER_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIzOGUyM2FiMS1kNzNlLTQ2NjYtOTExYi0yNWNkZmRlZGMwY2UiLCJ1c2VybmFtZSI6InVzZXIxIiwiYXV0aE1ldGhvZElkIjoiMzBjMzI3ZDQtOTkxMC00NjI5LTgyYTktZWZjNGNmN2NhZDgwIiwidG9rZW5QdXJwb3NlIjoidXNlci1hdXRoIiwiaWF0IjoxNzY1NzA1MTI0LCJleHAiOjE3NjU3MDg3MjR9.kQ8mbkgxyncVAuZj16bKxqM2_6sl-Iw4uuwsSUzZEd8"
 PREDEFINED_TOOL_CONTEXT = ToolContext(
     metadata={
-        "base_url": "http://172.23.176.1:5000",
+        "base_url": os.environ.get("CUSTOM_SPACES_BACKEND_URL"),
         "default_headers": {
             "Authorization": f"Bearer {JWT_BEARER_TOKEN}",
         },
@@ -161,9 +162,7 @@ async def main():
             messages.append(Message(role=Role.user, content=user_input))
 
             # Get response from agent
-            response = await agent.run(
-                messages=messages
-            )
+            response = await agent.run(messages=messages)
 
             # Display the response
             if response.final_text:

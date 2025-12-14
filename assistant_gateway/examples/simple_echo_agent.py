@@ -11,7 +11,6 @@ from assistant_gateway.schemas import (
     Role,
     ToolCall,
     ToolResult,
-    UserContext,
 )
 from assistant_gateway.tools.base import ToolContext
 from assistant_gateway.tools.registry import ToolRegistry
@@ -32,10 +31,7 @@ class SimpleEchoAgent(Agent):
             register_default_crud_suite(registry)
         return registry
 
-    async def run(
-        self,
-        messages: List[Message]
-    ) -> AssistantResponse:
+    async def run(self, messages: List[Message]) -> AssistantResponse:
         last_user = next((m for m in reversed(messages) if m.role == Role.user), None)
         if not last_user:
             return AssistantResponse(

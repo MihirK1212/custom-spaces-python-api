@@ -7,26 +7,20 @@ sys.path.append("..")
 sys.path.append("../..")
 
 import asyncio
+from claude_agent_sdk import ClaudeAgentOptions
+from pydantic import BaseModel
+from typing import Optional, List
+import dotenv
 
 from assistant_gateway.agents.claude import ClaudeBaseAgent
 from assistant_gateway.tools.registry import ToolRegistry
-from assistant_gateway.tools.base import ToolMetadata, ToolContext, ToolResult
+from assistant_gateway.tools.base import ToolConfig, ToolContext, ToolResult
 from assistant_gateway.tools.base import Tool
 from assistant_gateway.schemas import (
     Message,
-    AssistantResponse,
-    UserContext,
     Role,
-    AgentStep,
-    ToolCall,
-    ToolResult as SchemaToolResult,
+    ToolResult,
 )
-from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions
-
-from pydantic import BaseModel
-from typing import Optional, List
-
-import dotenv
 
 dotenv.load_dotenv()
 
@@ -45,7 +39,7 @@ class AdditionOutput(BaseModel):
     result: int
 
 
-ADDITION_TOOL_METADATA = ToolMetadata(
+ADDITION_TOOL_CONFIG = ToolConfig(
     name="addition",
     description="Add two numbers a and b, where a and b are integers. return the result of the addition of a and b, result = a + b",
     input_model=AdditionInput,
@@ -56,7 +50,7 @@ ADDITION_TOOL_METADATA = ToolMetadata(
 
 class AdditionTool(Tool):
     def __init__(self) -> None:
-        super().__init__(metadata=ADDITION_TOOL_METADATA)
+        super().__init__(config=ADDITION_TOOL_CONFIG)
 
     async def run(self, context: ToolContext) -> ToolResult:
         input = context.input
@@ -78,7 +72,7 @@ class MultiplicationOutput(BaseModel):
     result: int
 
 
-MULTIPLICATION_TOOL_METADATA = ToolMetadata(
+MULTIPLICATION_TOOL_CONFIG = ToolConfig(
     name="multiplication",
     description="Multiply two numbers a and b, where a and b are integers. return the result of the multiplication of a and b, result = a * b",
     input_model=MultiplicationInput,
@@ -89,7 +83,7 @@ MULTIPLICATION_TOOL_METADATA = ToolMetadata(
 
 class MultiplicationTool(Tool):
     def __init__(self) -> None:
-        super().__init__(metadata=MULTIPLICATION_TOOL_METADATA)
+        super().__init__(config=MULTIPLICATION_TOOL_CONFIG)
 
     async def run(self, context: ToolContext) -> ToolResult:
         input = context.input
@@ -110,22 +104,22 @@ class InsaneOutput(BaseModel):
     result: int
 
 
-INSANITY_TOOL_METADATA = ToolMetadata(
+INSANITY_TOOL_CONFIG = ToolConfig(
     name="insanity",
-    description="Return the result of the insanity of the number x, result = x * 28 + 11",
+    description="Return the result of the insanity of the number x",
     input_model=InsaneInput,
-    output_description="The result of the insanity of the number x, result = x * 28 + 11",
+    output_description="The result of the insanity of the number x",
     output_model=InsaneOutput,
 )
 
 
 class InsanityTool(Tool):
     def __init__(self) -> None:
-        super().__init__(metadata=INSANITY_TOOL_METADATA)
+        super().__init__(config=INSANITY_TOOL_CONFIG)
 
     async def run(self, context: ToolContext) -> ToolResult:
         input = context.input
-        result = input["x"] * 28 + 11
+        result = input["x"] * 28 + 12
         return ToolResult(name=self.name, output=result)
 
 

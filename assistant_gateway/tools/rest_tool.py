@@ -2,24 +2,38 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional, Type
 from urllib.parse import urljoin
-
 import httpx
-from jsonschema import (
-    ValidationError as JsonSchemaValidationError,
-    validate as jsonschema_validate,
-)
 from pydantic import BaseModel, Field, ValidationError, create_model
 
 from assistant_gateway.errors import ToolExecutionError
 from assistant_gateway.schemas import ToolResult
-from assistant_gateway.tools.base import Tool, ToolContext, ToolMetadata
+from assistant_gateway.tools.base import Tool, ToolContext, ToolConfig
+
+
+class _RESTToolConfig(ToolConfig):
+    """ "
+    Configuration for a REST tool. It extends the ToolConfig class, and adds a backend_url field.
+    """
+
+    backend_url: Optional[str] = Field(
+        default=None,
+        description="The base URL of the backend server. If not provided, the base URL will be taken during runtime from the ToolContext.",
+    )
 
 
 class _DefaultRESTQueryAndPayloadModel(BaseModel):
+    """
+    Default model for the query and payload parameters to be passed inside the input of the ToolContext during runtime for a REST tool.
+    """
+
     pass
 
 
 class _BaseRESTToolInput(BaseModel):
+    """
+    Model for the input to be passsed inside the ToolContext during runtime for a REST tool.
+    """
+
     path: str = Field(description="Path relative to the CRUD base URL, e.g. /todos")
     method: str = Field(description="HTTP method: GET, POST, PUT, PATCH, DELETE")
     query: Optional[_DefaultRESTQueryAndPayloadModel] = Field(
@@ -47,6 +61,7 @@ class RESTTool(Tool):
         name: str,
         description: str,
         *,
+        backend_url: Optional[str] = None,
         query_params_model: Optional[Type[BaseModel]] = None,
         data_payload_model: Optional[Type[BaseModel]] = None,
         json_payload_model: Optional[Type[BaseModel]] = None,
@@ -65,16 +80,17 @@ class RESTTool(Tool):
             json_payload_model=json_payload_model,
         )
 
-        # build metadata using input model and output model
-        metadata = ToolMetadata(
+        # build config using name, description, input model, output model, and backend_url
+        self._config = _RESTToolConfig(
             name=name,
             description=description,
             input_model=self._input_model,
             output_description=f"{RESTTool.get_output_description(output_model)}",
             output_model=output_model,
+            backend_url=backend_url,
         )
 
-        super().__init__(metadata)
+        super().__init__(self._config)
 
     async def run(self, context: ToolContext) -> ToolResult:
         try:
@@ -86,7 +102,11 @@ class RESTTool(Tool):
             parsed_input, _BaseRESTToolInput
         ), f"parsed input is not a _BaseRESTToolInput: {parsed_input}"
 
-        base_url = parsed_input.base_url or context.metadata.get("base_url")
+        base_url = (
+            parsed_input.base_url
+            or context.metadata.get("base_url")
+            or self._config.backend_url
+        )
         if not base_url:
             raise ToolExecutionError(
                 f"{self.name}: missing base_url. Provide one in ToolContext or the tool input."
