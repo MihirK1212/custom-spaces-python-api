@@ -12,6 +12,7 @@ from assistant_gateway.tools.registry import ToolRegistry
 from assistant_gateway.schemas import (
     Message,
     AssistantResponse,
+    UserContext,
     Role,
     AgentStep,
     ToolCall,
@@ -33,12 +34,6 @@ class ClaudeBaseAgent(Agent):
         self.api_key = api_key
 
     def get_mcp_server_options(self) -> ClaudeAgentOptions:
-        """
-        Get the MCP server options for the Claude agent.
-        These options will be used to instantiate the ClaudeSDKClient.
-        You can make use of the get_mcp_server_config to get the MCP server config,
-        and then combine multiple server configs into a single options object.
-        """
         raise NotImplementedError("Subclasses must implement this method")
 
     @classmethod
@@ -73,7 +68,10 @@ class ClaudeBaseAgent(Agent):
         )
         return server, tool_functions
 
-    async def run(self, messages: List[Message]) -> AssistantResponse:
+    async def run(
+        self,
+        messages: List[Message]
+    ) -> AssistantResponse:
         mcp_server_options = self.get_mcp_server_options()
 
         # Convert messages to Claude SDK format
@@ -140,7 +138,7 @@ class ClaudeBaseAgent(Agent):
         tool_input_schema = cls._build_input_schema(tool)
         print(f"tool input schema: {tool_input_schema}")
 
-        @claude_tool_decorator(tool.name, tool.config.description, tool_input_schema)
+        @claude_tool_decorator(tool.name, tool.metadata.description, tool_input_schema)
         async def _invoke(args: Dict[str, Any]):
             tool_context_with_input = predefined_tool_context.with_input(args)
             result = await tool.run(tool_context_with_input)
@@ -166,55 +164,53 @@ class ClaudeBaseAgent(Agent):
     @classmethod
     def _build_input_schema(cls, tool: Tool) -> Dict[str, Any]:
         """Build a proper JSON Schema from the tool's input model."""
-        model = tool.config.input_model
+        model = tool.metadata.input_model
         if not model:
             return {"type": "object", "properties": {}}
-
+        
         # Use Pydantic's built-in JSON schema generation
         json_schema = model.model_json_schema()
-
+        
         # Filter out fields we don't want to expose to the tool input
         excluded_fields = {}
-        if "properties" in json_schema:
-            json_schema["properties"] = {
-                k: v
-                for k, v in json_schema["properties"].items()
+        if 'properties' in json_schema:
+            json_schema['properties'] = {
+                k: v for k, v in json_schema['properties'].items()
                 if k not in excluded_fields
             }
-        if "required" in json_schema:
-            json_schema["required"] = [
-                r for r in json_schema["required"] if r not in excluded_fields
+        if 'required' in json_schema:
+            json_schema['required'] = [
+                r for r in json_schema['required']
+                if r not in excluded_fields
             ]
-
+        
         # Resolve $defs references inline for simpler schema
         json_schema = cls._resolve_schema_refs(json_schema)
-
+        
         # Remove $defs after resolving
-        if "$defs" in json_schema:
-            del json_schema["$defs"]
-
+        if '$defs' in json_schema:
+            del json_schema['$defs']
+        
         return json_schema
 
     @classmethod
-    def _resolve_schema_refs(
-        cls, schema: Dict[str, Any], defs: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    def _resolve_schema_refs(cls, schema: Dict[str, Any], defs: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Recursively resolve $ref references in JSON Schema."""
         if defs is None:
-            defs = schema.get("$defs", {})
-
+            defs = schema.get('$defs', {})
+        
         if isinstance(schema, dict):
             # Handle $ref
-            if "$ref" in schema:
-                ref_path = schema["$ref"]
+            if '$ref' in schema:
+                ref_path = schema['$ref']
                 # Extract the definition name from "#/$defs/DefinitionName"
-                if ref_path.startswith("#/$defs/"):
-                    def_name = ref_path.split("/")[-1]
+                if ref_path.startswith('#/$defs/'):
+                    def_name = ref_path.split('/')[-1]
                     if def_name in defs:
                         # Return a copy of the resolved definition (recursively resolve it too)
                         return cls._resolve_schema_refs(defs[def_name].copy(), defs)
                 return schema
-
+            
             # Recursively resolve all dict values
             return {k: cls._resolve_schema_refs(v, defs) for k, v in schema.items()}
         elif isinstance(schema, list):

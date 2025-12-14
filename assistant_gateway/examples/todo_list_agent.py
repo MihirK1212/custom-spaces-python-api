@@ -6,22 +6,19 @@ sys.path.append(".")
 sys.path.append("..")
 sys.path.append("../..")
 
+from assistant_gateway.agents.claude import ClaudeBaseAgent
+from assistant_gateway.tools.rest_tool import RESTTool
+from pydantic import BaseModel
+from assistant_gateway.tools.registry import ToolRegistry
+from assistant_gateway.tools.base import ToolContext
+from assistant_gateway.schemas import Message, UserContext, Role
+from claude_agent_sdk import ClaudeAgentOptions
 import os
 import asyncio
 from typing import Optional, List
 from pydantic import Field
+
 import dotenv
-from claude_agent_sdk import ClaudeAgentOptions
-from pydantic import BaseModel
-
-from assistant_gateway.agents.claude import ClaudeBaseAgent
-from assistant_gateway.tools.rest_tool import RESTTool
-from assistant_gateway.tools.registry import ToolRegistry
-from assistant_gateway.tools.base import ToolContext
-from assistant_gateway.schemas import Message, Role
-from assistant_gateway.tools.registry import ToolRegistry
-from assistant_gateway.tools.rest_tool import RESTTool, RestToolContext
-
 
 dotenv.load_dotenv()
 
@@ -67,11 +64,13 @@ TODO_API_REST_TOOLS = [
 ]
 
 # temporary hardcoded token, will come dynamically later
-JWT_BEARER_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIzOGUyM2FiMS1kNzNlLTQ2NjYtOTExYi0yNWNkZmRlZGMwY2UiLCJ1c2VybmFtZSI6InVzZXIxIiwiYXV0aE1ldGhvZElkIjoiMzBjMzI3ZDQtOTkxMC00NjI5LTgyYTktZWZjNGNmN2NhZDgwIiwidG9rZW5QdXJwb3NlIjoidXNlci1hdXRoIiwiaWF0IjoxNzY1NzE2Mjc3LCJleHAiOjE3NjU3MTk4Nzd9.61W1ctlUzS9EVmXkAjUaYv1hA0U0nBBiVMAAnTsgt_k"
-PREDEFINED_TOOL_CONTEXT = RestToolContext(
-    backend_url=os.environ.get("BACKEND_URL"),
-    default_headers={
-        "Authorization": f"Bearer {JWT_BEARER_TOKEN}",
+JWT_BEARER_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIzOGUyM2FiMS1kNzNlLTQ2NjYtOTExYi0yNWNkZmRlZGMwY2UiLCJ1c2VybmFtZSI6InVzZXIxIiwiYXV0aE1ldGhvZElkIjoiMzBjMzI3ZDQtOTkxMC00NjI5LTgyYTktZWZjNGNmN2NhZDgwIiwidG9rZW5QdXJwb3NlIjoidXNlci1hdXRoIiwiaWF0IjoxNzY1MDA3MDI4LCJleHAiOjE3NjUwMTA2Mjh9.VFds8YWytIvQCKN9NL63idY2x1ysutkYQbMLUoR0mhM"
+PREDEFINED_TOOL_CONTEXT = ToolContext(
+    metadata={
+        "base_url": "http://localhost:5000",
+        "default_headers": {
+            "Authorization": f"Bearer {JWT_BEARER_TOKEN}",
+        },
     },
 )
 
@@ -79,7 +78,7 @@ PREDEFINED_TOOL_CONTEXT = RestToolContext(
 class ClaudeTodoListAgent(ClaudeBaseAgent):
     def __init__(
         self,
-        api_key: Optional[str] = os.environ.get("ANTHROPIC_API_KEY"),
+        api_key: Optional[str],
         model: str = DEFAULT_MODEL,
     ) -> None:
         super().__init__(api_key)
@@ -95,7 +94,7 @@ class ClaudeTodoListAgent(ClaudeBaseAgent):
 
         # Use with Claude
         self._mcp_server_options = ClaudeAgentOptions(
-            model=model or DEFAULT_MODEL,
+            model=model,
             mcp_servers={"space-todo-list": space_todo_list_mcp_server},
             system_prompt="You are a helpful space todo list assistant. Use the available tools to add and get todo items for a given widgetId from the Space API.",
             allowed_tools=[
@@ -162,7 +161,9 @@ async def main():
             messages.append(Message(role=Role.user, content=user_input))
 
             # Get response from agent
-            response = await agent.run(messages=messages)
+            response = await agent.run(
+                messages=messages
+            )
 
             # Display the response
             if response.final_text:
