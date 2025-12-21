@@ -3,8 +3,8 @@ from __future__ import annotations
 import os
 import sys
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(os.path.dirname(os.path.dirname(CURRENT_DIR)))  # assistant_gateway/
-sys.path.append(os.path.dirname(CURRENT_DIR))  # assistant_gateway/examples/
+sys.path.append(os.path.dirname(os.path.dirname(CURRENT_DIR)))
+sys.path.append(os.path.dirname(CURRENT_DIR))
 sys.path.append(
     os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_DIR)))
 )  # repo root
@@ -12,9 +12,10 @@ sys.path.append(
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from assistant_gateway.examples.chat_orchestrator.todo_list_agent_chat_orchestrator import build_gateway_config
-
 from assistant_gateway.rest_api.fast_api_rest_assistant.enrich import enrich_app_with_assistant_router
+
+from space_assistant_gateway.config.base import build_gateway_config
+
 
 
 def create_app() -> FastAPI:

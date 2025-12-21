@@ -1,0 +1,154 @@
+import os
+
+from typing import Dict, Optional
+
+import dotenv
+from claude_agent_sdk import ClaudeAgentOptions
+from pydantic import BaseModel, Field
+
+
+from assistant_gateway.agents.claude import ClaudeBaseAgent
+from assistant_gateway.chat_orchestrator.core.config import (
+    GatewayDefaultFallbackConfig,
+)
+from assistant_gateway.chat_orchestrator.core.schemas import (
+    BackendServerContext,
+    UserContext,
+)
+from assistant_gateway.tools.registry import ToolRegistry
+from assistant_gateway.tools.rest_tool import RESTTool, RestToolContext
+
+dotenv.load_dotenv()
+
+# Default Claude model; override with CLAUDE_MODEL env var if desired.
+DEFAULT_MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-5-20250929")
+
+
+class GetTodoListQueryParamsModel(BaseModel):
+    widgetId: str
+
+
+class AddTodoItemDataPayloadModel(BaseModel):
+    content: str = Field(description="The content of the todo item")
+
+
+class GetTodoListRESTTool(RESTTool):
+    def __init__(self) -> None:
+        super().__init__(
+            name="get_todo_list",
+            description=(
+                "Get the todo list for a given widgetId from the Space API. "
+                "Endpoint: GET /api/widgets/todo/{widgetId}"
+            ),
+            query_params_model=GetTodoListQueryParamsModel,
+        )
+
+
+class AddTodoItemRESTTool(RESTTool):
+    def __init__(self) -> None:
+        super().__init__(
+            name="add_todo_item",
+            description=(
+                "Add a new todo item to the todo list for a given widgetId from the "
+                "Space API. Endpoint: POST /api/widgets/todo/{widgetId}"
+            ),
+            data_payload_model=AddTodoItemDataPayloadModel,
+        )
+
+
+def build_tool_registry() -> ToolRegistry:
+    registry = ToolRegistry()
+    registry.register(GetTodoListRESTTool())
+    registry.register(AddTodoItemRESTTool())
+    return registry
+
+
+class DynamicClaudeTodoListAgent(ClaudeBaseAgent):
+    """
+    Claude agent wired with the todo REST tools.
+
+    The tool context (backend URL + headers) is injected at construction time so it
+    can be derived from the chat_orchestrator GatewayConfig builder arguments.
+    """
+
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        model: Optional[str],
+        tool_context: RestToolContext,
+    ) -> None:
+        super().__init__(api_key)
+        self._tool_context = tool_context
+        self._model = model or DEFAULT_MODEL
+        self._tool_registry = build_tool_registry()
+
+        server, _ = self.get_mcp_server_config(
+            name="space-todo-list-agent",
+            version="0.1.0",
+            tool_registry=self._tool_registry,
+            predefined_tool_context=self._tool_context,
+        )
+
+        self._options = ClaudeAgentOptions(
+            model=self._model,
+            mcp_servers={"space-todo-list": server},
+            system_prompt=(
+                "You are a helpful space todo list assistant. Use the available tools "
+                "to add and get todo items for a given widgetId from the Space API."
+            ),
+            allowed_tools=[
+                "mcp__space-todo-list__get_todo_list",
+                "mcp__space-todo-list__add_todo_item",
+            ],
+        )
+
+    def get_mcp_server_options(self) -> ClaudeAgentOptions:
+        return self._options
+
+
+def build_todo_agent(
+    user_context: Optional[UserContext],
+    backend_server_context: Optional[BackendServerContext],
+    default_fallback_config: Optional[GatewayDefaultFallbackConfig],
+) -> DynamicClaudeTodoListAgent:
+    """
+    Create a todo-list agent using dynamic inputs supplied by the orchestrator.
+    """
+
+    backend_url = (
+        (backend_server_context.base_url if backend_server_context else None)
+        or (
+            default_fallback_config.fallback_backend_url
+            if default_fallback_config
+            else None
+        )
+        or os.environ.get("BACKEND_URL")
+    )
+
+    if not backend_url:
+        raise ValueError(
+            "Missing backend_url. Provide BackendServerContext.base_url or set "
+            "BACKEND_URL/FALLBACK_BACKEND_URL."
+        )
+
+    token = (user_context.auth_token if user_context else None) or os.environ.get(
+        "TODO_AGENT_BEARER_TOKEN"
+    )
+    headers: Dict[str, str] = {"Authorization": f"Bearer {token}"} if token else {}
+
+    tool_context = RestToolContext(
+        backend_url=backend_url,
+        default_headers=headers,
+    )
+    print("tool_context inside build_todo_agent", tool_context)
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise ValueError("ANTHROPIC_API_KEY is required to run the agent.")
+
+    return DynamicClaudeTodoListAgent(
+        api_key=api_key,
+        model=os.environ.get("CLAUDE_MODEL", DEFAULT_MODEL),
+        tool_context=tool_context,
+    )
