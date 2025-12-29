@@ -49,6 +49,19 @@ class AddWidgetRESTTool(RESTTool):
                 "Add a new widget to a custom space. "
                 "Supported widget types: chat, money_split, todo_list. "
                 "Endpoint: POST /api/custom_space/{spaceId}/widget"
+                '''
+                Example:
+                curl -X 'POST' \
+                'http://localhost:5000/api/custom_space/68f7838274710931d1c342b5/widget' \
+                -H 'accept: application/json' \
+                -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIzOGUyM2FiMS1kNzNlLTQ2NjYtOTExYi0yNWNkZmRlZGMwY2UiLCJ1c2VybmFtZSI6InVzZXIxIiwiYXV0aE1ldGhvZElkIjoiMzBjMzI3ZDQtOTkxMC00NjI5LTgyYTktZWZjNGNmN2NhZDgwIiwidG9rZW5QdXJwb3NlIjoidXNlci1hdXRoIiwiaWF0IjoxNzY3MDE2MDEzLCJleHAiOjE3NjcwMTk2MTN9.jhQGvM58GNRQUayGIm4jaOu5HkW2vD7cF5GSrUYjTNA' \
+                -H 'Content-Type: application/json' \
+                -d '{
+                "widgetType": "todo_list",
+                "displayName": "Test From FastAPI Swagger",
+                "description": ""
+                }'
+                '''
             ),
             query_params_model=AddWidgetQueryParamsModel,
             data_payload_model=AddWidgetDataPayloadModel,
@@ -67,7 +80,7 @@ class RemoveWidgetRESTTool(RESTTool):
             name="remove_widget_from_space",
             description=(
                 "Remove a widget from a custom space. "
-                "Endpoint: DELETE /api/custom_space/widget/{widgetId}"
+                "Endpoint: DELETE /api/custom-spaces/widget/{widgetId}"
             ),
             query_params_model=RemoveWidgetQueryParamsModel,
         )
@@ -90,7 +103,7 @@ class UpdateWidgetRESTTool(RESTTool):
             name="update_widget",
             description=(
                 "Update an existing widget's display name and/or description. "
-                "Endpoint: PATCH /api/custom_space/widget/{widgetId}"
+                "Endpoint: PATCH /api/custom-spaces/widget/{widgetId}"
             ),
             query_params_model=UpdateWidgetQueryParamsModel,
             data_payload_model=UpdateWidgetDataPayloadModel,

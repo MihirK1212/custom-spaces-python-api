@@ -200,7 +200,7 @@ class RESTTool(Tool):
             return {}
 
         if not payload_model:
-            return payload.model_dump(exclude_none=True)
+            return payload.model_dump(mode="json", exclude_none=True)
 
         if isinstance(payload, payload_model):
             payload_model_instance = payload
@@ -216,7 +216,7 @@ class RESTTool(Tool):
                 f"{cls.name}: query parameters must be a dict or an instance of {payload_model.__name__}"
             )
 
-        return payload_model_instance.model_dump(exclude_none=True)
+        return payload_model_instance.model_dump(mode="json", exclude_none=True)
 
     @classmethod
     def build_input_model(
