@@ -25,11 +25,26 @@ DEFAULT_MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-5-20250929")
 
 
 class GetTodoListQueryParamsModel(BaseModel):
-    widgetId: str
+    widgetId: str = Field(description="The ID of the todo list widget")
 
 
 class AddTodoItemDataPayloadModel(BaseModel):
     content: str = Field(description="The content of the todo item")
+
+
+class UpdateTodoItemQueryParamsModel(BaseModel):
+    widgetId: str = Field(description="The ID of the todo list widget")
+    itemId: str = Field(description="The ID of the todo item to update")
+
+
+class UpdateTodoItemDataPayloadModel(BaseModel):
+    content: Optional[str] = Field(default=None, description="The updated content of the todo item")
+    completed: Optional[bool] = Field(default=None, description="Whether the todo item is completed")
+
+
+class DeleteTodoItemQueryParamsModel(BaseModel):
+    widgetId: str = Field(description="The ID of the todo list widget")
+    itemId: str = Field(description="The ID of the todo item to delete")
 
 
 class GetTodoListRESTTool(RESTTool):
@@ -56,10 +71,38 @@ class AddTodoItemRESTTool(RESTTool):
         )
 
 
+class UpdateTodoItemRESTTool(RESTTool):
+    def __init__(self) -> None:
+        super().__init__(
+            name="update_todo_item",
+            description=(
+                "Update an existing todo item in the todo list for a given widgetId and itemId. "
+                "Can update the content and/or completed status. "
+                "Endpoint: PATCH /api/widgets/todo/item/{widgetId}/{itemId}"
+            ),
+            query_params_model=UpdateTodoItemQueryParamsModel,
+            json_payload_model=UpdateTodoItemDataPayloadModel,
+        )
+
+
+class DeleteTodoItemRESTTool(RESTTool):
+    def __init__(self) -> None:
+        super().__init__(
+            name="delete_todo_item",
+            description=(
+                "Delete a todo item from the todo list for a given widgetId and itemId. "
+                "Endpoint: DELETE /api/widgets/todo/item/{widgetId}/{itemId}"
+            ),
+            query_params_model=DeleteTodoItemQueryParamsModel,
+        )
+
+
 def build_tool_registry() -> ToolRegistry:
     registry = ToolRegistry()
     registry.register(GetTodoListRESTTool())
     registry.register(AddTodoItemRESTTool())
+    registry.register(UpdateTodoItemRESTTool())
+    registry.register(DeleteTodoItemRESTTool())
     return registry
 
 
@@ -95,11 +138,13 @@ class DynamicClaudeTodoListAgent(ClaudeBaseAgent):
             mcp_servers={"space-todo-list": server},
             system_prompt=(
                 "You are a helpful space todo list assistant. Use the available tools "
-                "to add and get todo items for a given widgetId from the Space API."
+                "to get, add, update, and delete todo items for a given widgetId from the Space API."
             ),
             allowed_tools=[
                 "mcp__space-todo-list__get_todo_list",
                 "mcp__space-todo-list__add_todo_item",
+                "mcp__space-todo-list__update_todo_item",
+                "mcp__space-todo-list__delete_todo_item",
             ],
         )
 

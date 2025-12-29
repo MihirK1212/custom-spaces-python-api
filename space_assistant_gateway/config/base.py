@@ -11,6 +11,7 @@ from assistant_gateway.chat_orchestrator.tasks_queue_manager import (
     InMemoryTasksQueueManager,
 )
 from space_assistant_gateway.config.agents.todo_list import build_todo_agent
+from space_assistant_gateway.config.agents.custom_space_widgets import build_custom_space_widgets_agent
 
 
 def build_gateway_config() -> GatewayConfig:
@@ -30,7 +31,11 @@ def build_gateway_config() -> GatewayConfig:
             "todo-list": AgentConfig(
                 name="todo-list",
                 builder=build_todo_agent,
-            )
+            ),
+            "custom-space-widgets": AgentConfig(
+                name="custom-space-widgets",
+                builder=build_custom_space_widgets_agent,
+            ),
         },
         default_fallback_config=default_fallback,
         chat_store=InMemoryChatStore(),
