@@ -48,7 +48,7 @@ class AddWidgetRESTTool(RESTTool):
             description=(
                 "Add a new widget to a custom space. "
                 "Supported widget types: chat, money_split, todo_list. "
-                "Endpoint: POST /api/custom-spaces/{spaceId}/widget"
+                "Endpoint: POST /api/custom_space/{spaceId}/widget"
             ),
             query_params_model=AddWidgetQueryParamsModel,
             data_payload_model=AddWidgetDataPayloadModel,
@@ -67,7 +67,7 @@ class RemoveWidgetRESTTool(RESTTool):
             name="remove_widget_from_space",
             description=(
                 "Remove a widget from a custom space. "
-                "Endpoint: DELETE /api/custom-spaces/widget/{widgetId}"
+                "Endpoint: DELETE /api/custom_space/widget/{widgetId}"
             ),
             query_params_model=RemoveWidgetQueryParamsModel,
         )
@@ -90,7 +90,7 @@ class UpdateWidgetRESTTool(RESTTool):
             name="update_widget",
             description=(
                 "Update an existing widget's display name and/or description. "
-                "Endpoint: PATCH /api/custom-spaces/widget/{widgetId}"
+                "Endpoint: PATCH /api/custom_space/widget/{widgetId}"
             ),
             query_params_model=UpdateWidgetQueryParamsModel,
             data_payload_model=UpdateWidgetDataPayloadModel,
