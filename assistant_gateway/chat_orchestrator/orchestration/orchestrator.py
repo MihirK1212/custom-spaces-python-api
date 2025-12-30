@@ -16,6 +16,7 @@ from assistant_gateway.chat_orchestrator.core.schemas import (
     ChatMetadata,
     ChatStatus,
     StoredAgentInteraction,
+    StoredAssistantOutput,
     StoredUserInput,
     TaskStatus,
     UserContext,
@@ -81,7 +82,8 @@ class ConversationOrchestrator:
 
     async def list_interactions(self, chat_id: str) -> List[StoredAgentInteraction]:
         await self._ensure_chat_exists(chat_id)
-        return await self._chat_store.list_interactions(chat_id)
+        interactions = await self._chat_store.list_interactions(chat_id)
+        return [self._coerce_stored_interaction(interaction) for interaction in interactions]
 
     async def send_message(
         self,
@@ -155,13 +157,13 @@ class ConversationOrchestrator:
         if not response.messages and not response.final_text and not response.steps:
             return
 
-        stored_response = response.model_copy(deep=True)
-
         now = datetime.now(timezone.utc)
-        # Augment the existing AgentOutput instance with StoredAgentInteraction fields
-        object.__setattr__(stored_response, "id", str(uuid4()))
-        object.__setattr__(stored_response, "created_at", now)
-        object.__setattr__(stored_response, "metadata", {})
+        stored_response = StoredAssistantOutput(
+            **response.model_dump(),
+            id=str(uuid4()),
+            created_at=now,
+            metadata={},
+        )
         await self._chat_store.append_interaction(chat_id, stored_response)
 
     async def _enqueue_background_task(
@@ -228,3 +230,22 @@ class ConversationOrchestrator:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Chat not found"
             )
+
+    def _coerce_stored_interaction(
+        self, interaction: StoredAgentInteraction
+    ) -> StoredAgentInteraction:
+        if isinstance(interaction, (StoredUserInput, StoredAssistantOutput)):
+            return interaction
+
+        if isinstance(interaction, AgentOutput):
+            # Backward-compatibility: convert legacy AgentOutput instances persisted before
+            # StoredAssistantOutput was introduced.
+            created_at = getattr(interaction, "created_at", datetime.now(timezone.utc))
+            return StoredAssistantOutput(
+                **interaction.model_dump(),
+                id=getattr(interaction, "id", str(uuid4())),
+                created_at=created_at,
+                metadata=getattr(interaction, "metadata", {}),
+            )
+
+        raise ValueError(f"Unsupported interaction type: {type(interaction)}")
