@@ -16,6 +16,7 @@ from assistant_gateway.chat_orchestrator.core.schemas import (
     ChatMetadata,
     ChatStatus,
     StoredAgentInteraction,
+    StoredUserInput,
     TaskStatus,
     UserContext,
 )
@@ -92,7 +93,7 @@ class ConversationOrchestrator:
         backend_server_context: Optional[BackendServerContext] = None,
     ) -> Tuple[ChatMetadata, Optional[AgentOutput], Optional[BackgroundTask]]:
         chat = await self.get_chat(chat_id)
-        user_interaction = StoredAgentInteraction(
+        user_interaction = StoredUserInput(
             id=str(uuid4()),
             role=Role.user,
             content=content,
