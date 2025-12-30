@@ -10,12 +10,13 @@ from assistant_gateway.agents.base import Agent
 from assistant_gateway.tools.base import Tool, ToolContext
 from assistant_gateway.tools.registry import ToolRegistry
 from assistant_gateway.schemas import (
-    Message,
-    AssistantResponse,
+    AgentInteraction,
+    AgentOutput,
     Role,
     AgentStep,
     ToolCall,
-    ToolResult as SchemaToolResult,
+    ToolResult,
+    UserInput,
 )
 
 
@@ -73,15 +74,21 @@ class ClaudeBaseAgent(Agent):
         )
         return server, tool_functions
 
-    async def run(self, messages: List[Message]) -> AssistantResponse:
+    async def run(self, interactions: List[AgentInteraction]) -> AgentOutput:
         mcp_server_options = self.get_mcp_server_options()
 
         # Convert messages to Claude SDK format
-        claude_messages = [
-            {"role": msg.role.value, "content": msg.content}
-            for msg in messages
-            if msg.role in (Role.user, Role.assistant)
-        ]
+        # Extract content using helper method that handles different AgentInteraction subclasses
+        claude_messages = []
+        for msg in interactions:
+            if msg.role not in (Role.user, Role.assistant):
+                continue
+            content_text = self._get_interaction_content(msg)
+            if content_text is None:
+                continue
+            claude_messages.append(
+                {"role": msg.role.value, "content": self._stringify(content_text)}
+            )
 
         prompt = claude_messages[-1]["content"] if claude_messages else ""
 
@@ -93,67 +100,105 @@ class ClaudeBaseAgent(Agent):
             async for message in client.receive_response():
                 all_messages.append(message)
 
-        # Parse all messages into AgentSteps and ToolResults
+        # Parse all messages into message, steps and result text in order to return an AgentOutput
+        assistant_messages: List[str] = []
         steps: List[AgentStep] = []
-        tool_results: List[SchemaToolResult] = []
-        assistant_messages: List[Message] = []
-        text_parts: List[str] = []
         result_text: Optional[str] = None
+
+        # Track tool calls by ID for associating results with their calls
+        tool_call_names: Dict[str, str] = {}
 
         for message in all_messages:
             # Handle AssistantMessage - has content list with ContentBlocks
             if self._is_assistant_message(message):
+                content_blocks = self._get_value(message, "content", [])
+                if not isinstance(content_blocks, list):
+                    continue
                 step_thought: Optional[str] = None
                 step_tool_calls: List[ToolCall] = []
-                step_text_parts: List[str] = []
+                step_tool_results: List[ToolResult] = []
+                step_messages: List[str] = []
 
-                for content_block in message.content:
+                for content_block in content_blocks:
                     # TextBlock - has 'text' attribute
                     if self._is_text_block(content_block):
-                        step_text_parts.append(content_block.text)
-                        text_parts.append(content_block.text)
+                        text = self._get_value(content_block, "text")
+                        if text is not None:
+                            text_str = self._stringify(text)
+                            step_messages.append(text_str)
 
                     # ThinkingBlock - has 'thinking' and 'signature' attributes
                     elif self._is_thinking_block(content_block):
-                        step_thought = content_block.thinking
+                        thinking = self._get_value(content_block, "thinking")
+                        if thinking is not None:
+                            step_thought = self._stringify(thinking)
 
                     # ToolUseBlock - has 'id', 'name', 'input' attributes
                     elif self._is_tool_use_block(content_block):
+                        call_id = self._stringify(self._get_value(content_block, "id"))
+                        if not call_id:
+                            continue
+                        tool_name = self._stringify(
+                            self._get_value(content_block, "name")
+                        )
+                        input_payload = (
+                            self._get_value(content_block, "input", {}) or {}
+                        )
+                        if not isinstance(input_payload, dict):
+                            try:
+                                input_payload = dict(input_payload)
+                            except Exception:
+                                input_payload = {"value": input_payload}
                         tool_call = ToolCall(
-                            id=content_block.id,
-                            name=content_block.name,
-                            input=content_block.input,
+                            id=call_id,
+                            name=tool_name,
+                            input=input_payload,
                         )
                         step_tool_calls.append(tool_call)
+                        # Track tool name for later result association
+                        tool_call_names[call_id] = tool_name
 
                     # ToolResultBlock - has 'tool_use_id', 'content', 'is_error' attributes
                     elif self._is_tool_result_block(content_block):
-                        tool_result = SchemaToolResult(
-                            tool_name="",  # Name not available in ToolResultBlock
-                            output=content_block.content,
-                            tool_call_id=content_block.tool_use_id,
+                        tool_use_id = self._stringify(
+                            self._get_value(content_block, "tool_use_id")
                         )
-                        tool_results.append(tool_result)
+                        output_content = self._get_value(content_block, "content")
+                        tool_result = ToolResult(
+                            tool_call_id=tool_use_id or None,
+                            output=output_content,
+                            name=(
+                                tool_call_names.get(tool_use_id)
+                                if tool_use_id
+                                else None
+                            ),
+                            is_error=bool(
+                                self._get_value(content_block, "is_error", False)
+                                or False
+                            ),
+                            raw_response=content_block,
+                        )
+                        step_tool_results.append(tool_result)
 
-                # Create an AgentStep if we have thought or tool calls
-                if step_thought or step_tool_calls:
+                # Create assistant message if we have text
+                # AgentOutput.messages is List[str], so append the text directly
+                if step_messages:
+                    assistant_messages.append("\n".join(step_messages))
+
+                # Create an AgentStep if we have thought, tool calls, or tool results
+                if step_thought or step_tool_calls or step_tool_results:
                     step = AgentStep(
                         thought=step_thought,
                         tool_calls=step_tool_calls,
-                        final_response="\n".join(step_text_parts) if step_text_parts else None,
+                        tool_results=step_tool_results,
                     )
                     steps.append(step)
 
-                # Create assistant message if we have text
-                if step_text_parts:
-                    assistant_messages.append(
-                        Message(role=Role.assistant, content="\n".join(step_text_parts))
-                    )
-
             # Handle ResultMessage - has 'result', 'is_error', 'total_cost_usd', etc.
             elif self._is_result_message(message):
-                if hasattr(message, "result") and message.result:
-                    result_text = message.result
+                result_value = self._get_value(message, "result")
+                if result_value:
+                    result_text = self._stringify(result_value)
 
             # Handle SystemMessage - has 'subtype' and 'data' attributes
             elif self._is_system_message(message):
@@ -165,83 +210,145 @@ class ClaudeBaseAgent(Agent):
                 # User messages from the stream are typically echoes, skip them
                 pass
 
-        # Combine all text parts for final_text
-        final_text = "\n".join(text_parts) if text_parts else None
-
         # If we have a result from ResultMessage, use that as final_text
+        # AgentOutput.messages is List[str], so compare and append strings directly
         if result_text:
             final_text = result_text
-            if not assistant_messages or assistant_messages[-1].content != result_text:
-                assistant_messages.append(Message(role=Role.assistant, content=result_text))
+            if not assistant_messages or assistant_messages[-1] != result_text:
+                assistant_messages.append(result_text)
+        else:
+            final_text = "\n".join(assistant_messages) if assistant_messages else None
 
-        return AssistantResponse(
+        return AgentOutput(
+            role=Role.assistant,
             messages=assistant_messages,
             steps=steps,
-            tool_results=tool_results,
             final_text=final_text,
         )
+
+    @classmethod
+    def _get_interaction_content(cls, interaction: AgentInteraction) -> str:
+        """
+        Extract content from an AgentInteraction.
+
+        Handles:
+        - UserInput: has .content attribute
+        - StoredAgentInteraction: has metadata['content']
+        - Other AgentInteraction subclasses: check for content in metadata or direct attribute
+        """
+        # Check if it's a UserInput with direct content attribute
+        if isinstance(interaction, UserInput):
+            return cls._stringify(interaction.content)
+
+        # Check for messages on an AgentOutput-like interaction
+        if hasattr(interaction, "messages"):
+            msgs = getattr(interaction, "messages")
+            if isinstance(msgs, list) and msgs:
+                # Join text parts to form a single content string
+                joined = "\n".join(cls._stringify(m) for m in msgs if m is not None)
+                if joined:
+                    return joined
+
+        # Check for final_text on an AgentOutput-like interaction
+        if hasattr(interaction, "final_text"):
+            final_text = getattr(interaction, "final_text")
+            if final_text:
+                return cls._stringify(final_text)
+
+        # Check for content in metadata (StoredAgentInteraction pattern)
+        if hasattr(interaction, "metadata") and isinstance(interaction.metadata, dict):
+            content = interaction.metadata.get("content")
+            if content is not None:
+                return cls._stringify(content)
+
+        # Fallback: check for direct content attribute (for flexibility)
+        if hasattr(interaction, "content"):
+            return cls._stringify(interaction.content)
+
+        return ""
+
+    @staticmethod
+    def _has_attr_or_key(obj: Any, key: str) -> bool:
+        return hasattr(obj, key) or (isinstance(obj, dict) and key in obj)
+
+    @staticmethod
+    def _get_value(obj: Any, key: str, default: Any = None) -> Any:
+        if isinstance(obj, dict):
+            return obj.get(key, default)
+        return getattr(obj, key, default)
+
+    @staticmethod
+    def _stringify(value: Any) -> str:
+        if value is None:
+            return ""
+        try:
+            return str(value)
+        except Exception:
+            return ""
 
     @staticmethod
     def _is_assistant_message(message: Any) -> bool:
         """Check if message is an AssistantMessage (has content list and model)."""
-        return (
-            hasattr(message, "content")
-            and isinstance(message.content, list)
-            and hasattr(message, "model")
+        return ClaudeBaseAgent._has_attr_or_key(message, "content") and isinstance(
+            ClaudeBaseAgent._get_value(message, "content"), list
         )
 
     @staticmethod
     def _is_result_message(message: Any) -> bool:
         """Check if message is a ResultMessage (has subtype, duration_ms, is_error, etc.)."""
         return (
-            hasattr(message, "subtype")
-            and hasattr(message, "duration_ms")
-            and hasattr(message, "is_error")
-            and hasattr(message, "num_turns")
+            ClaudeBaseAgent._has_attr_or_key(message, "subtype")
+            and ClaudeBaseAgent._has_attr_or_key(message, "duration_ms")
+            and ClaudeBaseAgent._has_attr_or_key(message, "is_error")
+            and ClaudeBaseAgent._has_attr_or_key(message, "num_turns")
         )
 
     @staticmethod
     def _is_system_message(message: Any) -> bool:
         """Check if message is a SystemMessage (has subtype and data, but not ResultMessage fields)."""
         return (
-            hasattr(message, "subtype")
-            and hasattr(message, "data")
-            and not hasattr(message, "duration_ms")
+            ClaudeBaseAgent._has_attr_or_key(message, "subtype")
+            and ClaudeBaseAgent._has_attr_or_key(message, "data")
+            and not ClaudeBaseAgent._has_attr_or_key(message, "duration_ms")
         )
 
     @staticmethod
     def _is_user_message(message: Any) -> bool:
         """Check if message is a UserMessage (has content but not model or subtype)."""
         return (
-            hasattr(message, "content")
-            and not hasattr(message, "model")
-            and not hasattr(message, "subtype")
+            ClaudeBaseAgent._has_attr_or_key(message, "content")
+            and not ClaudeBaseAgent._has_attr_or_key(message, "model")
+            and not ClaudeBaseAgent._has_attr_or_key(message, "subtype")
         )
 
     @staticmethod
     def _is_text_block(block: Any) -> bool:
         """Check if content block is a TextBlock."""
-        return hasattr(block, "text") and not hasattr(block, "thinking")
+        return ClaudeBaseAgent._has_attr_or_key(
+            block, "text"
+        ) and not ClaudeBaseAgent._has_attr_or_key(block, "thinking")
 
     @staticmethod
     def _is_thinking_block(block: Any) -> bool:
         """Check if content block is a ThinkingBlock."""
-        return hasattr(block, "thinking") and hasattr(block, "signature")
+        return ClaudeBaseAgent._has_attr_or_key(
+            block, "thinking"
+        ) and ClaudeBaseAgent._has_attr_or_key(block, "signature")
 
     @staticmethod
     def _is_tool_use_block(block: Any) -> bool:
         """Check if content block is a ToolUseBlock."""
         return (
-            hasattr(block, "id")
-            and hasattr(block, "name")
-            and hasattr(block, "input")
-            and not hasattr(block, "tool_use_id")
+            ClaudeBaseAgent._has_attr_or_key(block, "id")
+            and ClaudeBaseAgent._has_attr_or_key(block, "name")
+            and ClaudeBaseAgent._has_attr_or_key(block, "input")
+            and not ClaudeBaseAgent._has_attr_or_key(block, "tool_use_id")
         )
 
     @staticmethod
     def _is_tool_result_block(block: Any) -> bool:
         """Check if content block is a ToolResultBlock."""
-        return hasattr(block, "tool_use_id")
+        return ClaudeBaseAgent._has_attr_or_key(block, "tool_use_id")
 
     @classmethod
     def _wrap_tool_for_claude(cls, tool: Tool, predefined_tool_context: ToolContext):

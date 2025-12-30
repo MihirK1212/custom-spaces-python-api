@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
-from assistant_gateway.schemas import AssistantResponse, Message
+from assistant_gateway.schemas import AgentOutput, AgentInteraction
 
 
 class ChatStatus(str, Enum):
@@ -13,7 +13,7 @@ class ChatStatus(str, Enum):
     archived = "archived"
 
 
-class StoredMessage(Message):
+class StoredAgentInteraction(AgentInteraction):
     id: str
     created_at: datetime
     metadata: Dict[str, Any] = Field(default_factory=dict)
@@ -55,7 +55,7 @@ class ChatMetadata(BaseModel):
 
 class Chat(BaseModel):
     chat: ChatMetadata
-    messages: List[StoredMessage] = Field(default_factory=list)
+    interactions: List[StoredAgentInteraction] = Field(default_factory=list)
 
 
 class TaskStatus(str, Enum):
@@ -73,5 +73,5 @@ class BackgroundTask(BaseModel):
     created_at: datetime
     updated_at: datetime
     payload: Dict[str, Any] = Field(default_factory=dict)
-    result: Optional[AssistantResponse] = None
+    result: Optional[AgentOutput] = None
     error: Optional[str] = None

@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import List
 
-from assistant_gateway.schemas import AssistantResponse, Message
+from assistant_gateway.schemas import AgentInteraction, AgentOutput 
 
 
 class Agent(ABC):
@@ -13,6 +13,6 @@ class Agent(ABC):
     @abstractmethod
     async def run(
         self,
-        messages: List[Message]
-    ) -> AssistantResponse:
+        interactions: List[AgentInteraction]
+    ) -> AgentOutput:
         raise NotImplementedError("Subclasses must implement this method")

@@ -5,7 +5,7 @@ from functools import lru_cache
 from fastapi import APIRouter, Depends, Response, status
 
 from assistant_gateway.rest_api.schemas import (
-    ChatMessagesResponse,
+    ChatInteractionsResponse,
     ChatResponse,
     CreateChatRequest,
     CreateChatResponse,
@@ -53,12 +53,12 @@ async def get_chat(
     return ChatResponse(chat=chat)
 
 
-@router.get("/chats/{chat_id}/messages", response_model=ChatMessagesResponse)
-async def list_chat_messages(
+@router.get("/chats/{chat_id}/interactions", response_model=ChatInteractionsResponse)
+async def list_chat_interactions(
     chat_id: str, orchestrator: ConversationOrchestrator = Depends(get_orchestrator)
-) -> ChatMessagesResponse:
-    messages = await orchestrator.list_messages(chat_id)
-    return ChatMessagesResponse(chat_id=chat_id, messages=messages)
+) -> ChatInteractionsResponse:
+    interactions = await orchestrator.list_interactions(chat_id)
+    return ChatInteractionsResponse(chat_id=chat_id, interactions=interactions)
 
 
 @router.post("/chats/{chat_id}/messages", response_model=SendMessageResponse)

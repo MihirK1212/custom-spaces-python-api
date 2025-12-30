@@ -185,7 +185,7 @@ class RESTTool(Tool):
             )
 
         return ToolResult(
-            tool_name=self.name,
+            name=self.name,
             output=body,
             raw_response={"status_code": response.status_code},
         )

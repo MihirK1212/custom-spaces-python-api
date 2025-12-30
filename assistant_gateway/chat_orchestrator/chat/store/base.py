@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from assistant_gateway.chat_orchestrator.core.schemas import ChatMetadata, StoredMessage
+from assistant_gateway.chat_orchestrator.core.schemas import ChatMetadata, StoredAgentInteraction
 
 
 class ChatStore:
@@ -17,8 +17,8 @@ class ChatStore:
     async def update_chat(self, chat: ChatMetadata) -> ChatMetadata:
         raise NotImplementedError
 
-    async def append_message(self, chat_id: str, message: StoredMessage) -> None:
+    async def append_interaction(self, chat_id: str, interaction: StoredAgentInteraction) -> None:
         raise NotImplementedError
 
-    async def list_messages(self, chat_id: str) -> List[StoredMessage]:
+    async def list_interactions(self, chat_id: str) -> List[StoredAgentInteraction]:
         raise NotImplementedError
