@@ -86,52 +86,162 @@ class ClaudeBaseAgent(Agent):
         prompt = claude_messages[-1]["content"] if claude_messages else ""
 
         # Call Claude with the configured MCP server options using ClaudeSDKClient
-        response = None
+        # Collect all messages from the stream for proper parsing
+        all_messages: List[Any] = []
         async with ClaudeSDKClient(options=mcp_server_options) as client:
             await client.query(prompt)
             async for message in client.receive_response():
-                response = message  # Keep the last message as the final response
+                all_messages.append(message)
 
-        # Parse the response into AgentSteps and ToolResults
+        # Parse all messages into AgentSteps and ToolResults
         steps: List[AgentStep] = []
         tool_results: List[SchemaToolResult] = []
         assistant_messages: List[Message] = []
+        text_parts: List[str] = []
+        result_text: Optional[str] = None
 
-        # Extract the final text response from Claude
-        final_text = ""
-        if hasattr(response, "content"):
-            # Handle response content (could be text or tool use)
-            for content_block in response.content:
-                if hasattr(content_block, "text"):
-                    final_text += content_block.text
-                elif (
-                    hasattr(content_block, "type") and content_block.type == "tool_use"
-                ):
-                    tool_call = ToolCall(
-                        id=content_block.id,
-                        name=content_block.name,
-                        input=content_block.input,
+        for message in all_messages:
+            # Handle AssistantMessage - has content list with ContentBlocks
+            if self._is_assistant_message(message):
+                step_thought: Optional[str] = None
+                step_tool_calls: List[ToolCall] = []
+                step_text_parts: List[str] = []
+
+                for content_block in message.content:
+                    # TextBlock - has 'text' attribute
+                    if self._is_text_block(content_block):
+                        step_text_parts.append(content_block.text)
+                        text_parts.append(content_block.text)
+
+                    # ThinkingBlock - has 'thinking' and 'signature' attributes
+                    elif self._is_thinking_block(content_block):
+                        step_thought = content_block.thinking
+
+                    # ToolUseBlock - has 'id', 'name', 'input' attributes
+                    elif self._is_tool_use_block(content_block):
+                        tool_call = ToolCall(
+                            id=content_block.id,
+                            name=content_block.name,
+                            input=content_block.input,
+                        )
+                        step_tool_calls.append(tool_call)
+
+                    # ToolResultBlock - has 'tool_use_id', 'content', 'is_error' attributes
+                    elif self._is_tool_result_block(content_block):
+                        tool_result = SchemaToolResult(
+                            tool_name="",  # Name not available in ToolResultBlock
+                            output=content_block.content,
+                            tool_call_id=content_block.tool_use_id,
+                        )
+                        tool_results.append(tool_result)
+
+                # Create an AgentStep if we have thought or tool calls
+                if step_thought or step_tool_calls:
+                    step = AgentStep(
+                        thought=step_thought,
+                        tool_calls=step_tool_calls,
+                        final_response="\n".join(step_text_parts) if step_text_parts else None,
                     )
-                    steps.append(AgentStep(tool_calls=[tool_call]))
-        elif hasattr(response, "text"):
-            final_text = response.text
-        elif isinstance(response, str):
-            final_text = response
-        elif isinstance(response, dict):
-            final_text = response.get("text", response.get("content", str(response)))
-        else:
-            final_text = str(response)
+                    steps.append(step)
 
-        # Create the assistant message
-        if final_text:
-            assistant_messages.append(Message(role=Role.assistant, content=final_text))
+                # Create assistant message if we have text
+                if step_text_parts:
+                    assistant_messages.append(
+                        Message(role=Role.assistant, content="\n".join(step_text_parts))
+                    )
+
+            # Handle ResultMessage - has 'result', 'is_error', 'total_cost_usd', etc.
+            elif self._is_result_message(message):
+                if hasattr(message, "result") and message.result:
+                    result_text = message.result
+
+            # Handle SystemMessage - has 'subtype' and 'data' attributes
+            elif self._is_system_message(message):
+                # System messages are metadata, not included in response messages
+                pass
+
+            # Handle UserMessage - has 'content' attribute (str or list)
+            elif self._is_user_message(message):
+                # User messages from the stream are typically echoes, skip them
+                pass
+
+        # Combine all text parts for final_text
+        final_text = "\n".join(text_parts) if text_parts else None
+
+        # If we have a result from ResultMessage, use that as final_text
+        if result_text:
+            final_text = result_text
+            if not assistant_messages or assistant_messages[-1].content != result_text:
+                assistant_messages.append(Message(role=Role.assistant, content=result_text))
 
         return AssistantResponse(
             messages=assistant_messages,
             steps=steps,
             tool_results=tool_results,
-            final_text=final_text if final_text else None,
+            final_text=final_text,
         )
+
+    @staticmethod
+    def _is_assistant_message(message: Any) -> bool:
+        """Check if message is an AssistantMessage (has content list and model)."""
+        return (
+            hasattr(message, "content")
+            and isinstance(message.content, list)
+            and hasattr(message, "model")
+        )
+
+    @staticmethod
+    def _is_result_message(message: Any) -> bool:
+        """Check if message is a ResultMessage (has subtype, duration_ms, is_error, etc.)."""
+        return (
+            hasattr(message, "subtype")
+            and hasattr(message, "duration_ms")
+            and hasattr(message, "is_error")
+            and hasattr(message, "num_turns")
+        )
+
+    @staticmethod
+    def _is_system_message(message: Any) -> bool:
+        """Check if message is a SystemMessage (has subtype and data, but not ResultMessage fields)."""
+        return (
+            hasattr(message, "subtype")
+            and hasattr(message, "data")
+            and not hasattr(message, "duration_ms")
+        )
+
+    @staticmethod
+    def _is_user_message(message: Any) -> bool:
+        """Check if message is a UserMessage (has content but not model or subtype)."""
+        return (
+            hasattr(message, "content")
+            and not hasattr(message, "model")
+            and not hasattr(message, "subtype")
+        )
+
+    @staticmethod
+    def _is_text_block(block: Any) -> bool:
+        """Check if content block is a TextBlock."""
+        return hasattr(block, "text") and not hasattr(block, "thinking")
+
+    @staticmethod
+    def _is_thinking_block(block: Any) -> bool:
+        """Check if content block is a ThinkingBlock."""
+        return hasattr(block, "thinking") and hasattr(block, "signature")
+
+    @staticmethod
+    def _is_tool_use_block(block: Any) -> bool:
+        """Check if content block is a ToolUseBlock."""
+        return (
+            hasattr(block, "id")
+            and hasattr(block, "name")
+            and hasattr(block, "input")
+            and not hasattr(block, "tool_use_id")
+        )
+
+    @staticmethod
+    def _is_tool_result_block(block: Any) -> bool:
+        """Check if content block is a ToolResultBlock."""
+        return hasattr(block, "tool_use_id")
 
     @classmethod
     def _wrap_tool_for_claude(cls, tool: Tool, predefined_tool_context: ToolContext):
