@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union, Annotated
 from pydantic import BaseModel, Field
 
-from assistant_gateway.schemas import AssistantResponse, Message
+from assistant_gateway.schemas import AgentOutput, UserInput
 
 
 class ChatStatus(str, Enum):
@@ -13,11 +13,23 @@ class ChatStatus(str, Enum):
     archived = "archived"
 
 
-class StoredMessage(Message):
+class StoredInteractionMetadata(BaseModel):
     id: str
     created_at: datetime
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
+
+class StoredUserInput(UserInput, StoredInteractionMetadata):
+    pass
+
+
+class StoredAssistantOutput(AgentOutput, StoredInteractionMetadata):
+    pass
+
+StoredAgentInteraction = Union[
+    StoredUserInput,
+    StoredAssistantOutput,
+]
 
 class UserContext(BaseModel):
     user_id: Optional[str] = None
@@ -55,7 +67,7 @@ class ChatMetadata(BaseModel):
 
 class Chat(BaseModel):
     chat: ChatMetadata
-    messages: List[StoredMessage] = Field(default_factory=list)
+    interactions: List[StoredAgentInteraction] = Field(default_factory=list)
 
 
 class TaskStatus(str, Enum):
@@ -73,5 +85,5 @@ class BackgroundTask(BaseModel):
     created_at: datetime
     updated_at: datetime
     payload: Dict[str, Any] = Field(default_factory=dict)
-    result: Optional[AssistantResponse] = None
+    result: Optional[AgentOutput] = None
     error: Optional[str] = None

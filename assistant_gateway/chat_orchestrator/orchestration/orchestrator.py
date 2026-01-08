@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Tuple
 from uuid import uuid4
 from fastapi import HTTPException, status
 
-from assistant_gateway.schemas import AssistantResponse, Message, Role
+from assistant_gateway.schemas import AgentOutput, Role
 from assistant_gateway.chat_orchestrator.core.config import (
     GatewayConfig,
 )
@@ -15,7 +15,9 @@ from assistant_gateway.chat_orchestrator.core.schemas import (
     BackendServerContext,
     ChatMetadata,
     ChatStatus,
-    StoredMessage,
+    StoredAgentInteraction,
+    StoredAssistantOutput,
+    StoredUserInput,
     TaskStatus,
     UserContext,
 )
@@ -78,9 +80,10 @@ class ConversationOrchestrator:
             )
         return chat
 
-    async def list_messages(self, chat_id: str) -> List[StoredMessage]:
+    async def list_interactions(self, chat_id: str) -> List[StoredAgentInteraction]:
         await self._ensure_chat_exists(chat_id)
-        return await self._chat_store.list_messages(chat_id)
+        interactions = await self._chat_store.list_interactions(chat_id)
+        return [self._coerce_stored_interaction(interaction) for interaction in interactions]
 
     async def send_message(
         self,
@@ -90,16 +93,16 @@ class ConversationOrchestrator:
         message_metadata: Optional[Dict] = None,
         user_context: Optional[UserContext] = None,
         backend_server_context: Optional[BackendServerContext] = None,
-    ) -> Tuple[ChatMetadata, Optional[AssistantResponse], Optional[BackgroundTask]]:
+    ) -> Tuple[ChatMetadata, Optional[AgentOutput], Optional[BackgroundTask]]:
         chat = await self.get_chat(chat_id)
-        user_message = StoredMessage(
+        user_interaction = StoredUserInput(
             id=str(uuid4()),
             role=Role.user,
             content=content,
             created_at=datetime.now(timezone.utc),
             metadata=message_metadata or {},
         )
-        await self._chat_store.append_message(chat_id, user_message)
+        await self._chat_store.append_interaction(chat_id, user_interaction)
         chat.updated_at = datetime.now(timezone.utc)
         await self._chat_store.update_chat(chat)
 
@@ -136,41 +139,32 @@ class ConversationOrchestrator:
         chat: ChatMetadata,
         user_context: Optional[UserContext] = None,
         backend_server_context: Optional[BackendServerContext] = None,
-    ) -> AssistantResponse:
-        messages = await self._chat_store.list_messages(chat.chat_id)
-        agent_messages = [
-            Message(role=msg.role, content=msg.content, tool_result=msg.tool_result)
-            for msg in messages
-        ]
+    ) -> AgentOutput:
+        interactions = await self._chat_store.list_interactions(chat.chat_id)
         agent = self._agent_session_manager.get_or_create(
             chat_id=chat.chat_id,
             agent_name=chat.agent_name,
             user_context=user_context,
             backend_server_context=backend_server_context,
         )
-        response = await agent.run(messages=agent_messages)
+        response = await agent.run(interactions=interactions)
         await self._persist_assistant_response(chat_id=chat.chat_id, response=response)
         return response
 
     async def _persist_assistant_response(
-        self, chat_id: str, response: AssistantResponse
+        self, chat_id: str, response: AgentOutput
     ) -> None:
-        if response.messages:
-            now = datetime.now(timezone.utc)
-            tool_metadata = (
-                {"tool_results": [tr.model_dump() for tr in response.tool_results]}
-                if response.tool_results
-                else {}
-            )
-            for msg in response.messages:
-                stored = StoredMessage(
-                    id=str(uuid4()),
-                    role=msg.role,
-                    content=msg.content,
-                    created_at=now,
-                    metadata=tool_metadata,
-                )
-                await self._chat_store.append_message(chat_id, stored)
+        if not response.messages and not response.final_text and not response.steps:
+            return
+
+        now = datetime.now(timezone.utc)
+        stored_response = StoredAssistantOutput(
+            **response.model_dump(),
+            id=str(uuid4()),
+            created_at=now,
+            metadata={},
+        )
+        await self._chat_store.append_interaction(chat_id, stored_response)
 
     async def _enqueue_background_task(
         self,
@@ -236,3 +230,22 @@ class ConversationOrchestrator:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Chat not found"
             )
+
+    def _coerce_stored_interaction(
+        self, interaction: StoredAgentInteraction
+    ) -> StoredAgentInteraction:
+        if isinstance(interaction, (StoredUserInput, StoredAssistantOutput)):
+            return interaction
+
+        if isinstance(interaction, AgentOutput):
+            # Backward-compatibility: convert legacy AgentOutput instances persisted before
+            # StoredAssistantOutput was introduced.
+            created_at = getattr(interaction, "created_at", datetime.now(timezone.utc))
+            return StoredAssistantOutput(
+                **interaction.model_dump(),
+                id=getattr(interaction, "id", str(uuid4())),
+                created_at=created_at,
+                metadata=getattr(interaction, "metadata", {}),
+            )
+
+        raise ValueError(f"Unsupported interaction type: {type(interaction)}")
