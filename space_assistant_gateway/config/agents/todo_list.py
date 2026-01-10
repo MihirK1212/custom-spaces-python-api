@@ -16,7 +16,11 @@ from assistant_gateway.chat_orchestrator.core.schemas import (
     UserContext,
 )
 from assistant_gateway.tools.registry import ToolRegistry
-from assistant_gateway.tools.rest_tool import RESTTool, RestToolContext
+from assistant_gateway.tools.rest_tool import (
+    RESTTool,
+    RestToolContext,
+    RestToolContextInputOverrides,
+)
 
 dotenv.load_dotenv()
 
@@ -38,8 +42,12 @@ class UpdateTodoItemQueryParamsModel(BaseModel):
 
 
 class UpdateTodoItemDataPayloadModel(BaseModel):
-    content: Optional[str] = Field(default=None, description="The updated content of the todo item")
-    completed: Optional[bool] = Field(default=None, description="Whether the todo item is completed")
+    content: Optional[str] = Field(
+        default=None, description="The updated content of the todo item"
+    )
+    completed: Optional[bool] = Field(
+        default=None, description="Whether the todo item is completed"
+    )
 
 
 class DeleteTodoItemQueryParamsModel(BaseModel):
@@ -119,10 +127,10 @@ class DynamicClaudeTodoListAgent(ClaudeBaseAgent):
         *,
         api_key: str,
         model: Optional[str],
-        tool_context: RestToolContext,
+        predefined_tool_context: RestToolContext,
     ) -> None:
         super().__init__(api_key)
-        self._tool_context = tool_context
+        self._predefined_tool_context = predefined_tool_context
         self._model = model or DEFAULT_MODEL
         self._tool_registry = build_tool_registry()
 
@@ -130,7 +138,7 @@ class DynamicClaudeTodoListAgent(ClaudeBaseAgent):
             name="space-todo-list-agent",
             version="0.1.0",
             tool_registry=self._tool_registry,
-            predefined_tool_context=self._tool_context,
+            predefined_tool_context=self._predefined_tool_context,
         )
 
         self._options = ClaudeAgentOptions(
@@ -182,11 +190,13 @@ def build_todo_agent(
     )
     headers: Dict[str, str] = {"Authorization": f"Bearer {token}"} if token else {}
 
-    tool_context = RestToolContext(
-        backend_url=backend_url,
-        default_headers=headers,
+    predefined_tool_context = RestToolContext(
+        input_overrides=RestToolContextInputOverrides(
+            backend_url=backend_url,
+            default_headers=headers,
+        )
     )
-    print("tool_context inside build_todo_agent", tool_context)
+    print("predefined_tool_context inside build_todo_agent", predefined_tool_context)
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
@@ -195,5 +205,5 @@ def build_todo_agent(
     return DynamicClaudeTodoListAgent(
         api_key=api_key,
         model=os.environ.get("CLAUDE_MODEL", DEFAULT_MODEL),
-        tool_context=tool_context,
+        predefined_tool_context=predefined_tool_context,
     )
