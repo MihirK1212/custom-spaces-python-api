@@ -16,11 +16,8 @@ from assistant_gateway.chat_orchestrator.core.schemas import (
     UserContext,
 )
 from assistant_gateway.tools.registry import ToolRegistry
-from assistant_gateway.tools.rest_tool import (
-    RESTTool,
-    RestToolContext,
-    RestToolContextInputOverrides,
-)
+from assistant_gateway.tools.rest_tool import RESTTool
+from typing import Any
 
 dotenv.load_dotenv()
 
@@ -125,12 +122,11 @@ class DynamicClaudeTodoListAgent(ClaudeBaseAgent):
     def __init__(
         self,
         *,
-        api_key: str,
         model: Optional[str],
-        predefined_tool_context: RestToolContext,
+        agent_level_input_overrides: Optional[Dict[str, Any]] = None,
     ) -> None:
-        super().__init__(api_key)
-        self._predefined_tool_context = predefined_tool_context
+        super().__init__()
+        self._agent_level_input_overrides = agent_level_input_overrides
         self._model = model or DEFAULT_MODEL
         self._tool_registry = build_tool_registry()
 
@@ -138,7 +134,7 @@ class DynamicClaudeTodoListAgent(ClaudeBaseAgent):
             name="space-todo-list-agent",
             version="0.1.0",
             tool_registry=self._tool_registry,
-            predefined_tool_context=self._predefined_tool_context,
+            agent_level_input_overrides=agent_level_input_overrides,
         )
 
         self._options = ClaudeAgentOptions(
@@ -190,20 +186,13 @@ def build_todo_agent(
     )
     headers: Dict[str, str] = {"Authorization": f"Bearer {token}"} if token else {}
 
-    predefined_tool_context = RestToolContext(
-        input_overrides=RestToolContextInputOverrides(
-            backend_url=backend_url,
-            default_headers=headers,
-        )
-    )
-    print("predefined_tool_context inside build_todo_agent", predefined_tool_context)
-
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise ValueError("ANTHROPIC_API_KEY is required to run the agent.")
+    agent_level_input_overrides = {
+        "backend_url": backend_url,
+        "headers": headers,
+    }
+    print("agent_level_input_overrides inside build_todo_agent", agent_level_input_overrides)
 
     return DynamicClaudeTodoListAgent(
-        api_key=api_key,
         model=os.environ.get("CLAUDE_MODEL", DEFAULT_MODEL),
-        predefined_tool_context=predefined_tool_context,
+        agent_level_input_overrides=agent_level_input_overrides,
     )
