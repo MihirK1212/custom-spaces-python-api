@@ -6,6 +6,19 @@ The Custom Spaces Python API adds an agentic layer on top of the Custom Spaces t
 
 ## Getting Started
 
+### Prerequisites
+
+The assistant-gateway needs to be installed locally into the environment using the `-e` flag:
+
+```bash
+pip install -e /path/to/assistant-gateway
+```
+
+For example:
+```bash
+pip install -e /home/mihir/projects/assistant-gateway
+```
+
 ### Environment Variables
 
 Set the following environment variables in your `.env` file:
