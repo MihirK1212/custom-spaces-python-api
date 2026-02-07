@@ -200,9 +200,8 @@ def build_custom_space_widgets_agent(
             "BACKEND_URL/FALLBACK_BACKEND_URL."
         )
 
-    token = (user_context.auth_token if user_context else None) or os.environ.get(
-        "WIDGETS_AGENT_BEARER_TOKEN"
-    )
+    token = (user_context.auth_token if user_context else None)
+    
     headers: Dict[str, str] = {"Authorization": f"Bearer {token}"} if token else {}
 
     agent_level_input_overrides = {

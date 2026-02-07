@@ -1,4 +1,3 @@
-import sys
 import os
 
 from assistant_gateway.chat_orchestrator.chat.store import InMemoryChatStore
@@ -7,11 +6,11 @@ from assistant_gateway.chat_orchestrator.core.config import (
     GatewayConfig,
     GatewayDefaultFallbackConfig,
 )
-from assistant_gateway.chat_orchestrator.tasks_queue_manager import (
-    InMemoryTasksQueueManager,
-)
 from space_assistant_gateway.config.agents.todo_list import build_todo_agent
-from space_assistant_gateway.config.agents.custom_space_widgets import build_custom_space_widgets_agent
+from space_assistant_gateway.config.agents.custom_space_widgets import (
+    build_custom_space_widgets_agent,
+)
+from assistant_gateway.clauq_btm.instance import ClauqBTM
 
 
 def build_gateway_config() -> GatewayConfig:
@@ -39,5 +38,5 @@ def build_gateway_config() -> GatewayConfig:
         },
         default_fallback_config=default_fallback,
         chat_store=InMemoryChatStore(),
-        queue_manager=InMemoryTasksQueueManager(),
+        clauq_btm=ClauqBTM(),
     )
